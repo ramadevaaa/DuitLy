@@ -4,14 +4,29 @@ import 'package:duitly/core/navigation/main_shell.dart';
 import 'package:duitly/features/auth/presentation/screens/login_screen.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:duitly/core/providers/database_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
+  final container = ProviderContainer();
+  final prefs = await SharedPreferences.getInstance();
+  final email = prefs.getString('user_email');
+  
+  if (email != null) {
+    final db = container.read(databaseProvider);
+    final user = await db.readUserByEmail(email);
+    if (user != null) {
+      container.read(authProvider.notifier).setInitialUser(user);
+    }
+  }
+
   runApp(
-    const ProviderScope(
-      child: MyApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: const MyApp(),
     ),
   );
 }

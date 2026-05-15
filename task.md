@@ -1,54 +1,40 @@
-# DuitLy - Project Roadmap & Task Checklist
+# DuitLy Enhancement Progress Tracker
 
-## Deskripsi Singkat
-DuitLy adalah aplikasi manajemen keuangan personal "Local-First" yang ditenagai oleh AI (Gemini API). Data disimpan secara lokal di SQLite untuk kecepatan dan privasi. AI (Gemini) akan membaca riwayat transaksi melalui *Context Injection* sebagai asisten finansial pintar.
+## 1. Session Management (Persistent Login)
+- [x] Update `AuthProvider` dan mekanisme routing awal aplikasi.
+- [x] Simpan status login (session) menggunakan `SharedPreferences` atau `secure_storage`.
+- [x] Buka otomatis ke Dashboard jika session masih valid (belum logout).
+- [x] Implementasikan tombol/fungsi Log Out untuk menghapus session.
+- [ ] (Opsional) Tambahkan batas waktu session (misal: 3 bulan).
 
-## Arsitektur & Teknologi
-- **UI/UX**: Flutter (Material 3)
-- **State Management**: flutter_riverpod
-- **Local Database**: sqflite (Strictly no cloud DB / Firebase)
-- **AI Engine**: google_generative_ai (Gemini API)
-- **Data Visualization**: fl_chart
-- **Architecture**: Clean Architecture (Layered)
+## 2. Fitur Report PDF by Filter
+- [x] Buat UI Filter Rentang Waktu (7 Hari, 30 Hari, 3 Bulan, 1 Tahun, dsb) di halaman History/Report.
+- [x] Buat query database untuk mengambil transaksi berdasarkan filter tanggal.
+- [x] Integrasikan package `pdf` dan `printing` / `path_provider` untuk membuat layout dokumen laporan (Pemasukan, Pengeluaran, Total).
+- [x] Buat fungsi untuk Save/Share file PDF yang dihasilkan.
 
----
+## 3. Dashboard AI Welcome Message
+- [x] Ambil data User Context (Goals tercapai/belum, saldo saat ini).
+- [x] Buat fungsi pemanggilan AI berjalan di *background* agar tidak memblokir UI.
+- [x] Simpan hasil *generate* AI beserta *timestamp* (waktu generate) di `SharedPreferences`.
+- [x] Buat *logic*: Jika data hari ini sudah ada, gunakan cache. Jika beda hari, *generate* ulang.
+- [x] Tampilkan di UI Dashboard.
 
-### Tahap 1: Setup Data Layer & SQLite ✅
-- [x] Buat model (User, Wallet, Kategori, Transaksi, ChatHistory).
-- [x] Inisialisasi `DatabaseHelper` dengan `sqflite`.
-- [x] Tulis struktur tabel SQLite (sesuai PDM).
-- [x] Buat fungsi CRUD untuk Transaksi dan Wallet.
-- [x] Implementasi fungsi Atomic `insertTransactionAndUpdateWallet()`.
+## 4. Chatbot Assistant (Gatekeeper & Optimasi)
+- [x] Rombak *System Prompt* di `ChatProvider`:
+  - Berperan sebagai **Gatekeeper** (tolak prompt di luar konteks aplikasi/finansial).
+  - Wajib menjawab **singkat, padat, to the point**, dan hemat token.
+  - Kurangi/hilangkan emotikon yang tidak perlu.
+- [x] Integrasi package `flutter_markdown` pada *chat bubble* di UI agar format seperti `**teks**` terender menjadi *bold*.
+- [x] Siapkan kerangka kode (placeholder logic) untuk integrasi *API Sembako/Kebutuhan Pokok*.
 
-### Tahap 2: State Management (Riverpod) ✅
-- [x] Buat `database_provider.dart`.
-- [x] Buat `wallet_provider.dart` (AsyncNotifier) untuk saldo & daftar wallet.
-- [x] Buat `transaction_provider.dart` (AsyncNotifier) terintegrasi dengan wallet state.
-
-### Tahap 3: Onboarding & Home / Dashboard Page ✅
-- [x] **Onboarding/QnA Screen**: Form inisialisasi Profil (Nama, Financial Goal, Income, Saldo Awal). Muncul jika tabel `user` kosong.
-- [x] **Home Dashboard**:
-  - [x] Top Bar: Sapaan & Profil.
-  - [x] Total Balance: Kalkulasi dari semua wallet.
-  - [x] Wallet Carousel: Kartu geser per sumber dana.
-  - [x] Recent Activity: 5 transaksi terbaru.
-- [x] **Add Transaction Sheet/Modal**: Form input (Judul, Nominal, IN/OUT, Dropdown Wallet & Kategori).
-- [x] **Bottom Navigation Bar**: Navigasi ke 4 halaman utama.
-
-### Tahap 4: History / Analytics Page ✅
-- [x] Implementasi **Pie Chart** pengeluaran berdasarkan kategori (`fl_chart`).
-- [x] Fitur **Filter Transaksi**: Rentang waktu (7 Hari, 30 Hari, 3 Bulan, 1 Tahun) & Filter Wallet.
-- [x] **Detailed List**: Daftar riwayat transaksi lengkap.
-
-### Tahap 5: DuitLy AI Assistant (Chatbot Page)
-- [ ] Buat `FinancialAIService` via `google_generative_ai`.
-- [ ] **Context Injection**: Fungsi untuk mengubah profil user & histori transaksi SQLite menjadi JSON untuk prompt Gemini.
-- [ ] **Chat Interface**: Tampilan ala WhatsApp/Telegram.
-- [ ] **Quick Suggestions**: Bubble pertanyaan cepat (e.g., "Rangkum pengeluaran minggu ini").
-- [ ] Simpan log percakapan ke tabel `chat_history`.
-
-### Tahap 6: Settings & Profile Management ✅
-- [x] **User Profile**: Edit nama/foto/income.
-- [x] **Financial Profile**: Edit data QnA (Goal, Income).
-- [x] **Wallet Management**: Tambah, edit, hapus sumber dana.
-- [x] **Privacy & Security**: Info keamanan data lokal.
+## 5. Integrasi Data Bahan Pokok (Hybrid Static Approach) - [DONE]
+- [x] **Sumber Data:** Menggunakan data statis dari **Info Pasar Denpasar (Mei 2026)** untuk akurasi dan stabilitas dan Sumber data dari PIHPS Bank Indonesia untuk Data harga Realtime untuk bulan Mei terakhir update.
+- [x] **Data Asset:** Implementasi `assets/data/harga_sembako_bali.json` yang berisi >25 komoditas (Beras, Ayam, Telur, Tempe, Mie Instan, dll).
+- [x] **Alur Kerja (Workflow):**
+  1. **Trigger:** `ChatProvider` mendeteksi kata kunci (harga, sembako, ayam, dll) dalam pesan user.
+  2. **Injection:** Jika terdeteksi, aplikasi memuat JSON dari assets dan menyuntikkannya sebagai *Context* ke dalam prompt AI.
+  3. **Calculation:** AI melakukan kalkulasi belanja (misal: budget 20rb) berdasarkan harga per kg/bungkus yang ada di data asset.
+  4. **Attribution:** AI memberikan jawaban dengan menyebutkan sumber data untuk menjaga kredibilitas.
+- [x] **Optimasi Token:** Data hanya dikirim ke API Gemini jika user benar-benar bertanya soal harga, sehingga menghemat kuota API.
+- [x] **Gatekeeper AI:** Memperketat instruksi agar AI hanya menjawab seputar finansial dan aplikasi DuitLy.

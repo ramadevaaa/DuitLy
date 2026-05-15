@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:duitly/features/transaction/presentation/providers/analytics_provider.dart';
 import 'package:duitly/features/transaction/presentation/providers/category_provider.dart';
 import 'package:duitly/features/transaction/data/models/category_model.dart';
+import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
+import 'package:duitly/features/transaction/presentation/providers/report_pdf_service.dart';
 
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
@@ -28,6 +30,36 @@ class AnalyticsScreen extends ConsumerWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('Analisis Keuangan', style: TextStyle(color: Colors.black)),
+        actions: [
+          Consumer(builder: (context, ref, _) {
+            return IconButton(
+              icon: const Icon(Icons.print, color: Colors.blue),
+              tooltip: 'Cetak Laporan PDF',
+              onPressed: () {
+                final filteredTx = ref.read(filteredTransactionProvider);
+                final user = ref.read(authProvider);
+                final filter = ref.read(filterProvider);
+                
+                filteredTx.whenData((transactions) {
+                  if (transactions.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada transaksi untuk dicetak.')));
+                    return;
+                  }
+                  
+                  String periodLabel = '';
+                  switch (filter) {
+                    case TransactionFilter.week7: periodLabel = '7 Hari Terakhir'; break;
+                    case TransactionFilter.month1: periodLabel = '30 Hari Terakhir'; break;
+                    case TransactionFilter.month3: periodLabel = '3 Bulan Terakhir'; break;
+                    case TransactionFilter.year1: periodLabel = '1 Tahun Terakhir'; break;
+                  }
+
+                  ReportPdfService.generateAndPrint(transactions, user?.nama ?? 'User', periodLabel);
+                });
+              },
+            );
+          }),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duitly/features/chat/presentation/providers/chat_provider.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -303,9 +304,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                 ],
               ),
-              child: Text(
-                msg.text,
-                style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+              child: MarkdownBody(
+                data: msg.text,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
+                  strong: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ),

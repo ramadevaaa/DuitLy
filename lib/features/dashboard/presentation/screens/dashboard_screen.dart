@@ -8,6 +8,8 @@ import 'package:duitly/features/wallet/data/models/wallet_model.dart';
 import 'package:duitly/features/transaction/presentation/providers/transaction_provider.dart';
 import 'package:duitly/features/transaction/presentation/widgets/add_transaction_sheet.dart';
 import 'package:duitly/core/providers/database_provider.dart';
+import 'package:duitly/features/dashboard/presentation/providers/welcome_ai_provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -147,7 +149,47 @@ class DashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              
+              // AI Welcome Message
+              Consumer(builder: (context, ref, _) {
+                final welcomeMsg = ref.watch(welcomeAiProvider);
+                return welcomeMsg.when(
+                  data: (msg) {
+                    if (msg == null || msg.isEmpty) return const SizedBox.shrink();
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.auto_awesome, color: Colors.blue, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              msg,
+                              style: TextStyle(color: Colors.blue[800], fontSize: 13, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  loading: () => const Center(child: LinearProgressIndicator()),
+                  error: (err, stack) => Container(
+                    padding: const EdgeInsets.all(12),
+                    child: Text('AI Error: $err', style: const TextStyle(color: Colors.red, fontSize: 10)),
+                  ),
+                );
+              }),
               const SizedBox(height: 24),
+
+
 
               // Wallet Carousel Header
               Row(
@@ -223,6 +265,134 @@ class DashboardScreen extends ConsumerWidget {
 
               const SizedBox(height: 24),
 
+              // Line Chart (Arus Kas 7 Hari Terakhir)
+              const Text('Arus Kas 7 Hari Terakhir', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              // Legend
+              Row(
+                children: [
+                  Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle)),
+                  const SizedBox(width: 4),
+                  const Text('Pemasukan', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(width: 16),
+                  Container(width: 12, height: 12, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
+                  const SizedBox(width: 4),
+                  const Text('Pengeluaran', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              transactionState.when(
+                data: (transactions) {
+                  final now = DateTime.now();
+                  final last7Days = List.generate(7, (index) => now.subtract(Duration(days: 6 - index)));
+                  
+                  List<FlSpot> incomeSpots = [];
+                  List<FlSpot> expenseSpots = [];
+                  double maxY = 0;
+
+                  for (int i = 0; i < 7; i++) {
+                    final date = last7Days[i];
+                    double dailyIn = 0;
+                    double dailyOut = 0;
+
+                    for (var tx in transactions) {
+                      if (tx.timeStamp.year == date.year &&
+                          tx.timeStamp.month == date.month &&
+                          tx.timeStamp.day == date.day) {
+                        if (tx.jenisArusKas == 'IN') dailyIn += tx.nominal;
+                        if (tx.jenisArusKas == 'OUT') dailyOut += tx.nominal;
+                      }
+                    }
+
+                    incomeSpots.add(FlSpot(i.toDouble(), dailyIn));
+                    expenseSpots.add(FlSpot(i.toDouble(), dailyOut));
+                    
+                    if (dailyIn > maxY) maxY = dailyIn;
+                    if (dailyOut > maxY) maxY = dailyOut;
+                  }
+
+                  if (maxY == 0) maxY = 10000;
+
+                  return Container(
+                    height: 200,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+                    ),
+                    child: LineChart(
+                      LineChartData(
+                        lineTouchData: LineTouchData(
+                          touchTooltipData: LineTouchTooltipData(
+                            getTooltipColor: (touchedSpot) => Colors.blueGrey.shade800,
+                            getTooltipItems: (touchedSpots) {
+                              return touchedSpots.map((spot) {
+                                return LineTooltipItem(
+                                  currencyFormat.format(spot.y),
+                                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                );
+                              }).toList();
+                            },
+                          ),
+                        ),
+                        gridData: const FlGridData(show: false),
+                        titlesData: FlTitlesData(
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                if (value.toInt() >= 0 && value.toInt() < 7) {
+                                  final date = last7Days[value.toInt()];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Text(DateFormat('dd/MM').format(date), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                                  );
+                                }
+                                return const Text('');
+                              },
+                              interval: 1,
+                              reservedSize: 22,
+                            ),
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        minX: 0,
+                        maxX: 6,
+                        minY: 0,
+                        maxY: maxY * 1.2,
+                        lineBarsData: [
+                          LineChartBarData(
+                            spots: incomeSpots,
+                            isCurved: true,
+                            color: Colors.green,
+                            barWidth: 3,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.1)),
+                          ),
+                          LineChartBarData(
+                            spots: expenseSpots,
+                            isCurved: true,
+                            color: Colors.red,
+                            barWidth: 3,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(show: true, color: Colors.red.withValues(alpha: 0.1)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator())),
+                error: (_, __) => const SizedBox(height: 200, child: Center(child: Text('Gagal memuat grafik'))),
+              ),
+              const SizedBox(height: 24),
+
               // Recent Activity
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -276,18 +446,6 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-            builder: (context) => const AddTransactionSheet(),
-          );
-        },
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

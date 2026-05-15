@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duitly/features/user/data/models/user_model.dart';
 import 'package:duitly/core/providers/database_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthNotifier extends Notifier<UserModel?> {
   @override
@@ -8,12 +9,20 @@ class AuthNotifier extends Notifier<UserModel?> {
     return null; // Default: Not logged in on app start
   }
 
-  void login(UserModel user) {
+  void setInitialUser(UserModel user) {
     state = user;
   }
 
-  void logout() {
+  Future<void> login(UserModel user) async {
+    state = user;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_email', user.email);
+  }
+
+  Future<void> logout() async {
     state = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_email');
   }
 
   Future<void> refreshUser() async {

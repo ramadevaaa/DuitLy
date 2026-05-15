@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:duitly/core/providers/database_provider.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 import 'package:duitly/features/chat/data/models/chat_history_model.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:convert';
 
 // Model untuk merepresentasikan satu pesan di UI (bisa dari User atau AI)
 class ChatMessage {
@@ -69,13 +71,14 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         maxOutputTokens: 2048,
       ),
       systemInstruction: Content.system(
-        'Kamu adalah DuitLy AI, asisten keuangan pribadi yang cerdas, ramah, dan membantu. '
-        'Kamu berbicara dalam Bahasa Indonesia yang santai namun profesional. '
-        'Tugasmu adalah membantu pengguna menganalisis keuangan mereka, memberikan saran pengelolaan uang, '
-        'mengidentifikasi pola pengeluaran, dan membantu mencapai tujuan finansial mereka. '
-        'Jika pengguna bertanya di luar topik keuangan, arahkan kembali dengan sopan. '
-        'Gunakan emoji secukupnya agar percakapan terasa lebih hidup. '
-        'Saat menganalisis data keuangan, berikan insight yang actionable dan spesifik.',
+        'Kamu adalah DuitLy AI, asisten keuangan pribadi. '
+        'PERATURAN PENTING (GATEKEEPER): Tolak semua pertanyaan yang tidak berhubungan dengan finansial, '
+        'pengelolaan uang, atau aplikasi DuitLy. Jika user bertanya tentang hal lain (seperti coding, resep masakan, dll), '
+        'jawab dengan ramah bahwa kamu hanya asisten keuangan. '
+        'PERATURAN GAYA BAHASA: Jawab dengan sangat SINGKAT, PADAT, dan TO THE POINT. '
+        'Hemat kata-kata. Jangan bertele-tele. JANGAN gunakan emotikon, cukup teks biasa. '
+        'Saat user meminta harga sembako (ayam, sayur, dll), gunakan data harga dari Info Pasar Denpasar & PIHPS BI (Mei 2026) yang diberikan dalam konteks. '
+        'PENTING: Kamu WAJIB menyebutkan sumber data (Info Pasar Denpasar & PIHPS BI) secara eksplisit dalam jawabanmu agar user tahu data ini valid.',
       ),
     );
   }
@@ -172,6 +175,23 @@ $recentTx
 ''';
   }
 
+  // Fungsi untuk mengambil data sembako statis dari asset
+  Future<String> _loadSembakoContext() async {
+    try {
+      final String response = await rootBundle.loadString('assets/data/harga_sembako_bali.json');
+      final data = json.decode(response) as List;
+      String context = "[DATA HARGA BAHAN POKOK - SUMBER: Info Pasar Denpasar & PIHPS Bank Indonesia (Mei 2026)]\n";
+      context += "INSTRUKSI: Gunakan data berikut untuk kalkulasi. Wajib cantumkan di jawaban: 'Sumber: Info Pasar Denpasar & PIHPS BI (Mei 2026)'\n\n";
+      for (var item in data) {
+        context += "- ${item['komoditas']}: Rp ${item['harga'].toString()} per ${item['satuan']}\n";
+      }
+      context += "\n[AKHIR DATA]\n";
+      return context;
+    } catch (e) {
+      return '';
+    }
+  }
+
   Future<void> sendMessage(String userText) async {
     if (userText.trim().isEmpty) return;
     final user = ref.read(authProvider);
@@ -222,6 +242,24 @@ $recentTx
       if (needsContext) {
         final context = await _buildFinancialContext();
         promptText = '$context\n\nPertanyaan pengguna: $userText';
+      }
+
+      if (userText.toLowerCase().contains('sembako') ||
+          userText.toLowerCase().contains('ayam') ||
+          userText.toLowerCase().contains('sayur') ||
+          userText.toLowerCase().contains('telur') ||
+          userText.toLowerCase().contains('makanan') ||
+          userText.toLowerCase().contains('bahan pokok') ||
+          userText.toLowerCase().contains('makan') ||
+          userText.toLowerCase().contains('masak') ||
+          userText.toLowerCase().contains('beli') ||
+          userText.toLowerCase().contains('rekomendasi') ||
+          userText.toLowerCase().contains('budget') ||
+          userText.toLowerCase().contains('anak kos') ||
+          userText.toLowerCase().contains('belanja') ||
+          userText.toLowerCase().contains('harga')) {
+        final sembakoContext = await _loadSembakoContext();
+        promptText = '$sembakoContext\n$promptText';
       }
 
       final response = await _chatSession.sendMessage(Content.text(promptText));
