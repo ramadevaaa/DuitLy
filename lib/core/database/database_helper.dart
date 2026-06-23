@@ -127,7 +127,11 @@ class DatabaseHelper {
 
   Future<int> insertWallet(WalletModel wallet) async {
     final db = await instance.database;
-    return await db.insert('wallet', wallet.toMap());
+    return await db.transaction((txn) async {
+      final idWallet = await txn.insert('wallet', wallet.toMap());
+      await _updateUserTotalKekayaan(txn, wallet.idUser);
+      return idWallet;
+    });
   }
 
   Future<List<WalletModel>> readAllWallets(int idUser) async {
@@ -138,20 +142,57 @@ class DatabaseHelper {
 
   Future<int> updateWallet(WalletModel wallet) async {
     final db = await instance.database;
-    return await db.update(
-      'wallet',
-      wallet.toMap(),
-      where: 'id_wallet = ?',
-      whereArgs: [wallet.idWallet],
-    );
+    return await db.transaction((txn) async {
+      final count = await txn.update(
+        'wallet',
+        wallet.toMap(),
+        where: 'id_wallet = ?',
+        whereArgs: [wallet.idWallet],
+      );
+      await _updateUserTotalKekayaan(txn, wallet.idUser);
+      return count;
+    });
   }
 
   Future<int> deleteWallet(int idWallet) async {
     final db = await instance.database;
-    return await db.delete(
-      'wallet',
-      where: 'id_wallet = ?',
-      whereArgs: [idWallet],
+    return await db.transaction((txn) async {
+      // 1. Dapatkan id_user dari wallet sebelum dihapus
+      final result = await txn.query(
+        'wallet',
+        columns: ['id_user'],
+        where: 'id_wallet = ?',
+        whereArgs: [idWallet],
+      );
+      if (result.isEmpty) return 0;
+      final idUser = result.first['id_user'] as int;
+
+      // 2. Hapus wallet
+      final count = await txn.delete(
+        'wallet',
+        where: 'id_wallet = ?',
+        whereArgs: [idWallet],
+      );
+
+      // 3. Hitung ulang total kekayaan
+      await _updateUserTotalKekayaan(txn, idUser);
+      return count;
+    });
+  }
+
+  // Helper method to recalculate total_kekayaan for user in D1 database
+  Future<void> _updateUserTotalKekayaan(DatabaseExecutor db, int idUser) async {
+    final allWallets = await db.query('wallet', where: 'id_user = ?', whereArgs: [idUser]);
+    final totalKekayaan = allWallets.fold<double>(
+      0.0,
+      (sum, w) => sum + ((w['saldo'] as num?)?.toDouble() ?? 0.0),
+    );
+
+    await db.update(
+      'user',
+      {'total_kekayaan': totalKekayaan},
+      where: 'id_user = ?',
+      whereArgs: [idUser],
     );
   }
 
@@ -232,18 +273,7 @@ class DatabaseHelper {
 
       // 5. [Proses 3.2 DFD] Hitung ulang Total Kekayaan dari SEMUA wallet
       //    lalu update kolom total_kekayaan di tabel user (D1)
-      final allWallets = await txn.query('wallet', where: 'id_user = ?', whereArgs: [currentWallet.idUser]);
-      final totalKekayaan = allWallets.fold<double>(
-        0.0,
-        (sum, w) => sum + ((w['saldo'] as num?)?.toDouble() ?? 0.0),
-      );
-
-      await txn.update(
-        'user',
-        {'total_kekayaan': totalKekayaan},
-        where: 'id_user = ?',
-        whereArgs: [currentWallet.idUser],
-      );
+      await _updateUserTotalKekayaan(txn, currentWallet.idUser);
     });
   }
 

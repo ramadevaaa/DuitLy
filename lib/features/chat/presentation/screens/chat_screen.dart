@@ -76,7 +76,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final user = ref.watch(authProvider);
 
     // Auto scroll setiap ada pesan baru
-    ref.listen(chatProvider, (_, __) => _scrollToBottom());
+    ref.listen(chatProvider, (_, _) => _scrollToBottom());
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A), // Biru gelap premium

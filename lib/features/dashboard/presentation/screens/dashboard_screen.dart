@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:duitly/features/user/presentation/providers/user_provider.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 import 'package:duitly/features/wallet/presentation/providers/wallet_provider.dart';
 import 'package:duitly/features/wallet/data/models/wallet_model.dart';
 import 'package:duitly/features/transaction/presentation/providers/transaction_provider.dart';
-import 'package:duitly/features/transaction/presentation/widgets/add_transaction_sheet.dart';
 import 'package:duitly/core/providers/database_provider.dart';
 import 'package:duitly/features/dashboard/presentation/providers/welcome_ai_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:duitly/core/navigation/main_shell.dart';
+import 'package:duitly/features/transaction/presentation/providers/receipt_parser_provider.dart';
+import 'package:duitly/features/transaction/presentation/widgets/scan_confirmation_dialog.dart';
+import 'package:duitly/features/transaction/presentation/widgets/add_transaction_sheet.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -44,7 +48,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: jenisWallet,
+                  initialValue: jenisWallet,
                   decoration: const InputDecoration(labelText: 'Jenis Dompet', border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'Cash', child: Text('Cash')),
@@ -70,6 +74,7 @@ class DashboardScreen extends ConsumerWidget {
                   final db = ref.read(databaseProvider);
                   await db.insertWallet(newWallet);
                   ref.read(walletProvider.notifier).refresh();
+                  await ref.read(authProvider.notifier).refreshUser();
                   if (ctx.mounted) Navigator.pop(ctx);
                 },
                 child: const Text('Tambah'),
@@ -77,6 +82,181 @@ class DashboardScreen extends ConsumerWidget {
             ],
           );
         }
+      ),
+    );
+  }
+
+  void _showScanSourceOptions(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Text(
+                'Pilih Sumber Foto Struk',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text('Ambil dari Kamera'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _processScan(context, ref, ImageSource.camera);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.blue),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _processScan(context, ref, ImageSource.gallery);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processScan(BuildContext context, WidgetRef ref, ImageSource source) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Sedang membaca struk...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final parsed = await ref.read(receiptParserProvider.notifier).parseReceipt(source);
+    
+    if (context.mounted) {
+      Navigator.pop(context); // Close loading dialog
+    }
+
+    final parserState = ref.read(receiptParserProvider);
+    if (parserState.errorMessage != null) {
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Scan Gagal'),
+            content: Text(parserState.errorMessage!),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _openManualTransactionSheet(context);
+                },
+                child: const Text('Catat Manual'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup'),
+              ),
+            ],
+          ),
+        );
+      }
+    } else if (parsed != null) {
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => ScanConfirmationDialog(parsedReceipt: parsed),
+        );
+      }
+    }
+  }
+
+  void _openManualTransactionSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (context) => const AddTransactionSheet(),
+    );
+  }
+
+  Widget _buildShortcutCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[200]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -97,7 +277,7 @@ class DashboardScreen extends ConsumerWidget {
         title: userState.when(
           data: (user) => Text('Hai, ${user?.nama ?? "User"}!', style: const TextStyle(color: Colors.black)),
           loading: () => const Text('Loading...', style: TextStyle(color: Colors.black)),
-          error: (_, __) => const Text('DuitLy', style: TextStyle(color: Colors.black)),
+          error: (_, _) => const Text('DuitLy', style: TextStyle(color: Colors.black)),
         ),
         actions: [
           IconButton(
@@ -144,7 +324,7 @@ class DashboardScreen extends ConsumerWidget {
                         );
                       },
                       loading: () => const Text('...', style: TextStyle(color: Colors.white, fontSize: 32)),
-                      error: (_, __) => const Text('Error', style: TextStyle(color: Colors.white, fontSize: 32)),
+                      error: (_, _) => const Text('Error', style: TextStyle(color: Colors.white, fontSize: 32)),
                     ),
                   ],
                 ),
@@ -181,17 +361,64 @@ class DashboardScreen extends ConsumerWidget {
                     );
                   },
                   loading: () => const Center(child: LinearProgressIndicator()),
-                  error: (err, stack) => Container(
+                  error: (_, _) => Container(
                     padding: const EdgeInsets.all(12),
-                    child: Text('AI Error: $err', style: const TextStyle(color: Colors.red, fontSize: 10)),
+                    child: const Text('Gagal memuat AI', style: TextStyle(color: Colors.red, fontSize: 10)),
                   ),
                 );
               }),
               const SizedBox(height: 24),
 
-
-
-              // Wallet Carousel Header
+              // Aksi Cepat Grid
+              const Text('Aksi Cepat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                childAspectRatio: 2.5,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                children: [
+                  _buildShortcutCard(
+                    context,
+                    title: 'Scan Struk',
+                    subtitle: 'Catat otomatis',
+                    icon: Icons.document_scanner_outlined,
+                    iconColor: Colors.purple,
+                    bgColor: Colors.purple[50]!,
+                    onTap: () => _showScanSourceOptions(context, ref),
+                  ),
+                  _buildShortcutCard(
+                    context,
+                    title: 'Laporan PDF',
+                    subtitle: 'Unduh laporan',
+                    icon: Icons.picture_as_pdf_outlined,
+                    iconColor: Colors.orange,
+                    bgColor: Colors.orange[50]!,
+                    onTap: () => ref.read(activePageProvider.notifier).setPage(1),
+                  ),
+                  _buildShortcutCard(
+                    context,
+                    title: 'Tanya AI',
+                    subtitle: 'Konsultasi uang',
+                    icon: Icons.auto_awesome_outlined,
+                    iconColor: Colors.teal,
+                    bgColor: Colors.teal[50]!,
+                    onTap: () => ref.read(activePageProvider.notifier).setPage(2),
+                  ),
+                  _buildShortcutCard(
+                    context,
+                    title: 'Tambah Dompet',
+                    subtitle: 'Tambah akun baru',
+                    icon: Icons.account_balance_wallet_outlined,
+                    iconColor: Colors.blue,
+                    bgColor: Colors.blue[50]!,
+                    onTap: () => _showAddWalletDialog(context, ref),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -259,7 +486,7 @@ class DashboardScreen extends ConsumerWidget {
                     },
                   ),
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (_, __) => const Text('Gagal memuat dompet'),
+                  error: (_, _) => const Text('Gagal memuat dompet'),
                 ),
               ),
 
@@ -389,7 +616,7 @@ class DashboardScreen extends ConsumerWidget {
                   );
                 },
                 loading: () => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator())),
-                error: (_, __) => const SizedBox(height: 200, child: Center(child: Text('Gagal memuat grafik'))),
+                error: (_, _) => const SizedBox(height: 200, child: Center(child: Text('Gagal memuat grafik'))),
               ),
               const SizedBox(height: 24),
 
@@ -441,7 +668,7 @@ class DashboardScreen extends ConsumerWidget {
                   );
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, __) => const Text('Gagal memuat transaksi'),
+                error: (_, _) => const Text('Gagal memuat transaksi'),
               ),
             ],
           ),

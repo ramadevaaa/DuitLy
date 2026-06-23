@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duitly/features/user/data/models/user_model.dart';
 import 'package:duitly/features/wallet/data/models/wallet_model.dart';
 import 'package:duitly/core/providers/database_provider.dart';
+import 'package:duitly/core/utils/password_utils.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -36,19 +37,29 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       return;
     }
 
+    // Cek duplikasi email
+    final db = ref.read(databaseProvider);
+    final existingUser = await db.readUserByEmail(widget.email);
+    if (!mounted) return;
+    if (existingUser != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email sudah terdaftar! Gunakan email lain.')),
+      );
+      return;
+    }
+
     final initialBalance = double.tryParse(_initialBalanceController.text) ?? 0.0;
 
     final user = UserModel(
       nama: widget.nama,
       email: widget.email,
-      password: widget.password,
+      password: PasswordUtils.hashPassword(widget.password),
       tujuanFinansial: _goalController.text,
       kisaranPendapatan: double.tryParse(_incomeController.text) ?? 0.0,
       totalKekayaan: initialBalance,
     );
 
     // 1. Simpan User
-    final db = ref.read(databaseProvider);
     final idUser = await db.insertUser(user);
     final newUser = user.copyWith(idUser: idUser);
 

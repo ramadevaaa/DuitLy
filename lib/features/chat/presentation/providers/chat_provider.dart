@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:duitly/core/services/custom_ai_service.dart';
 import 'package:duitly/core/providers/database_provider.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 import 'package:duitly/features/chat/data/models/chat_history_model.dart';
@@ -49,61 +48,10 @@ class ChatState {
 }
 
 class ChatNotifier extends AsyncNotifier<ChatState> {
-  final String _apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-
-  late GenerativeModel _model;
-  late ChatSession _chatSession;
-
   @override
   FutureOr<ChatState> build() async {
-    _initGemini();
-    await _startNewSession();
     final messages = await _loadHistoryFromDB();
     return ChatState(messages: messages);
-  }
-
-  void _initGemini() {
-    _model = GenerativeModel(
-      model: 'gemini-2.5-flash',
-      apiKey: _apiKey,
-      generationConfig: GenerationConfig(
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      ),
-      systemInstruction: Content.system(
-        'Kamu adalah DuitLy AI, asisten keuangan pribadi. '
-        'PERATURAN PENTING (GATEKEEPER): Tolak semua pertanyaan yang tidak berhubungan dengan finansial, '
-        'pengelolaan uang, atau aplikasi DuitLy. Jika user bertanya tentang hal lain (seperti coding, resep masakan, dll), '
-        'jawab dengan ramah bahwa kamu hanya asisten keuangan. '
-        'PERATURAN GAYA BAHASA: Jawab dengan sangat SINGKAT, PADAT, dan TO THE POINT. '
-        'Hemat kata-kata. Jangan bertele-tele. JANGAN gunakan emotikon, cukup teks biasa. '
-        'Saat user meminta harga sembako (ayam, sayur, dll), gunakan data harga dari Info Pasar Denpasar & PIHPS BI (Mei 2026) yang diberikan dalam konteks. '
-        'PENTING: Kamu WAJIB menyebutkan sumber data (Info Pasar Denpasar & PIHPS BI) secara eksplisit dalam jawabanmu agar user tahu data ini valid.',
-      ),
-    );
-  }
-
-  Future<void> _startNewSession() async {
-    final history = await _buildGeminiHistory();
-    _chatSession = _model.startChat(history: history);
-  }
-
-  Future<List<Content>> _buildGeminiHistory() async {
-    final user = ref.read(authProvider);
-    if (user == null || user.idUser == null) return [];
-
-    final db = ref.read(databaseProvider);
-    final dbHistory = await db.readChatHistory(user.idUser!);
-
-    return dbHistory
-        .map(
-          (h) => [
-            Content.text(h.pesanUser),
-            Content.model([TextPart(h.balasanAi)]),
-          ],
-        )
-        .expand((e) => e)
-        .toList();
   }
 
   Future<List<ChatMessage>> _loadHistoryFromDB() async {
@@ -161,8 +109,8 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
     return '''
 [DATA KEUANGAN PENGGUNA - ${DateTime.now().toString().substring(0, 10)}]
 Nama: ${user.nama}
-Tujuan Finansial: ${user.tujuanFinansial ?? 'Belum diatur'}
-Kisaran Pendapatan: Rp ${(user.kisaranPendapatan ?? 0).toStringAsFixed(0)}/bulan
+Tujuan Finansial: ${user.tujuanFinansial}
+Kisaran Pendapatan: Rp ${user.kisaranPendapatan.toStringAsFixed(0)}/bulan
 Total Kekayaan: Rp ${totalKekayaan.toStringAsFixed(0)}
 Total Pemasukan (semua waktu): Rp ${totalPemasukan.toStringAsFixed(0)}
 Total Pengeluaran (semua waktu): Rp ${totalPengeluaran.toStringAsFixed(0)}
@@ -262,12 +210,41 @@ $recentTx
         promptText = '$sembakoContext\n$promptText';
       }
 
-      final response = await _chatSession.sendMessage(Content.text(promptText));
-      final aiReply =
-          response.text ?? 'Maaf, saya tidak dapat merespons saat ini.';
+      // Build message list for OpenRouter API
+      final List<Map<String, String>> apiMessages = [];
+      final db = ref.read(databaseProvider);
+      final dbHistory = await db.readChatHistory(user.idUser!);
+
+      // Limit context to the last 10 conversation turns to prevent token overflow
+      final int limit = 10;
+      final recentHistory = dbHistory.length > limit
+          ? dbHistory.sublist(dbHistory.length - limit)
+          : dbHistory;
+
+      for (final h in recentHistory) {
+        apiMessages.add({'role': 'user', 'content': h.pesanUser});
+        apiMessages.add({'role': 'assistant', 'content': h.balasanAi});
+      }
+
+      // Add the current prompt
+      apiMessages.add({'role': 'user', 'content': promptText});
+
+      const systemInstruction =
+          'Kamu adalah DuitLy AI, asisten keuangan pribadi. '
+          'PERATURAN PENTING (GATEKEEPER): Tolak semua pertanyaan yang tidak berhubungan dengan finansial, '
+          'pengelolaan uang, atau aplikasi DuitLy. Jika user bertanya tentang hal lain (seperti coding, resep masakan, dll), '
+          'jawab dengan ramah bahwa kamu hanya asisten keuangan. '
+          'PERATURAN GAYA BAHASA: Jawab dengan sangat SINGKAT, PADAT, dan TO THE POINT. '
+          'Hemat kata-kata. Jangan bertele-tele. JANGAN gunakan emotikon, cukup teks biasa. '
+          'Saat user meminta harga sembako (ayam, sayur, dll), gunakan data harga dari Info Pasar Denpasar & PIHPS BI (Mei 2026) yang diberikan dalam konteks. '
+          'PENTING: Kamu WAJIB menyebutkan sumber data (Info Pasar Denpasar & PIHPS BI) secara eksplisit dalam jawabanmu agar user tahu data ini valid.';
+
+      final aiReply = await CustomAIService.getChatCompletion(
+        apiMessages,
+        systemInstruction: systemInstruction,
+      );
 
       // Simpan ke SQLite
-      final db = ref.read(databaseProvider);
       await db.insertChatHistory(
         ChatHistoryModel(
           idUser: user.idUser!,
@@ -309,8 +286,6 @@ $recentTx
     final db = ref.read(databaseProvider);
     await db.deleteChatHistory(user.idUser!);
 
-    _initGemini();
-    await _startNewSession();
     state = AsyncValue.data(const ChatState());
   }
 }

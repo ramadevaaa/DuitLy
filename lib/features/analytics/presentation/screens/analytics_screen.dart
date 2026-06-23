@@ -170,11 +170,11 @@ class AnalyticsScreen extends ConsumerWidget {
                     );
                   },
                   loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (_, __) => const Text('Gagal memuat kategori'),
+                  error: (_, _) => const Text('Gagal memuat kategori'),
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const Text('Gagal memuat data'),
+              error: (_, _) => const Text('Gagal memuat data'),
             ),
 
             const SizedBox(height: 24),
@@ -228,7 +228,7 @@ class AnalyticsScreen extends ConsumerWidget {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const Text('Gagal memuat transaksi'),
+              error: (_, _) => const Text('Gagal memuat transaksi'),
             ),
           ],
         ),

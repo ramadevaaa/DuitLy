@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:duitly/features/user/presentation/screens/onboarding_screen.dart';
-import 'package:duitly/features/auth/presentation/screens/login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,6 +16,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _next() {
     if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harap isi semua kolom!')));
+      return;
+    }
+
+    // Validasi format email
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(_emailController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Format email tidak valid!')));
+      return;
+    }
+
+    // Validasi minimum password
+    if (_passwordController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password minimal 6 karakter!')));
       return;
     }
     

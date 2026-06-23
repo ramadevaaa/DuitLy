@@ -3,13 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duitly/core/navigation/main_shell.dart';
 import 'package:duitly/features/auth/presentation/screens/login_screen.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:duitly/core/providers/database_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
+
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (_) {
+    // Fail silently (will fallback to compile-time defines)
+  }
 
   final container = ProviderContainer();
   final prefs = await SharedPreferences.getInstance();

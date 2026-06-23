@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
-import 'package:duitly/features/user/presentation/providers/user_provider.dart';
 import 'package:duitly/core/providers/database_provider.dart';
+import 'package:duitly/core/utils/password_utils.dart';
 import 'package:duitly/features/auth/presentation/screens/register_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -19,9 +19,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _login() async {
     final db = ref.read(databaseProvider);
     final user = await db.readUserByEmail(_emailController.text);
+    if (!mounted) return;
 
     if (user != null) {
-      if (_passwordController.text == user.password) {
+      if (PasswordUtils.verifyPassword(_passwordController.text, user.password)) {
         ref.read(authProvider.notifier).login(user);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email atau Password salah!')));
@@ -36,67 +37,129 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context: context,
       builder: (ctx) {
         final emailCtrl = TextEditingController();
+        final namaCtrl = TextEditingController();
         return AlertDialog(
           title: const Text('Lupa Password?'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Masukkan email untuk mereset password.'),
+              const Text('Masukkan email dan nama lengkap yang terdaftar untuk verifikasi identitas.'),
               const SizedBox(height: 12),
-              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder())),
+              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()), keyboardType: TextInputType.emailAddress),
+              const SizedBox(height: 12),
+              TextField(controller: namaCtrl, decoration: const InputDecoration(labelText: 'Nama Lengkap (sesuai saat daftar)', border: OutlineInputBorder())),
             ],
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                _resetPasswordDialog(emailCtrl.text);
+              onPressed: () async {
+                final email = emailCtrl.text.trim();
+                final nama = namaCtrl.text.trim();
+
+                if (email.isEmpty || nama.isEmpty) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Email dan nama wajib diisi!')),
+                    );
+                  }
+                  return;
+                }
+
+                final db = ref.read(databaseProvider);
+                final user = await db.readUserByEmail(email);
+
+                if (user == null) {
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Email tidak ditemukan!')),
+                    );
+                  }
+                  return;
+                }
+
+                // Verifikasi identitas: cocokkan nama (case-insensitive)
+                if (user.nama.trim().toLowerCase() != nama.toLowerCase()) {
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Verifikasi gagal. Nama tidak cocok dengan data terdaftar.')),
+                    );
+                  }
+                  return;
+                }
+
+                // Identitas terverifikasi — lanjut ke dialog reset password
+                if (ctx.mounted) Navigator.pop(ctx);
+                _resetPasswordDialog(email);
               },
-              child: const Text('Kirim'),
+              child: const Text('Verifikasi'),
             ),
           ],
         );
-      }
+      },
     );
   }
 
   void _resetPasswordDialog(String email) {
-    // Simulasi ganti password
     showDialog(
       context: context,
       builder: (ctx) {
         final passCtrl = TextEditingController();
+        final confirmPassCtrl = TextEditingController();
         return AlertDialog(
           title: const Text('Reset Password'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Pesan reset telah dikirim (simulasi). Masukkan password baru untuk email $email'),
+              Text('Identitas terverifikasi untuk $email. Silakan buat password baru.'),
               const SizedBox(height: 12),
               TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password Baru', border: OutlineInputBorder()), obscureText: true),
+              const SizedBox(height: 12),
+              TextField(controller: confirmPassCtrl, decoration: const InputDecoration(labelText: 'Konfirmasi Password Baru', border: OutlineInputBorder()), obscureText: true),
             ],
           ),
           actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
             ElevatedButton(
               onPressed: () async {
+                if (passCtrl.text.length < 6) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Password minimal 6 karakter!')),
+                    );
+                  }
+                  return;
+                }
+
+                if (passCtrl.text != confirmPassCtrl.text) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Password dan konfirmasi tidak cocok!')),
+                    );
+                  }
+                  return;
+                }
+
                 final db = ref.read(databaseProvider);
                 final user = await db.readUserByEmail(email);
                 if (user != null) {
-                  final updatedUser = user.copyWith(password: passCtrl.text);
+                  final updatedUser = user.copyWith(password: PasswordUtils.hashPassword(passCtrl.text));
                   await db.updateUser(updatedUser);
                   if (ctx.mounted) Navigator.pop(ctx);
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password berhasil diubah')));
-                } else {
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email tidak ditemukan!')));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Password berhasil diubah!')),
+                    );
+                  }
                 }
               },
               child: const Text('Simpan Password Baru'),
             ),
           ],
         );
-      }
+      },
     );
   }
 

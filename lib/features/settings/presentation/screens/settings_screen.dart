@@ -271,6 +271,7 @@ class WalletManagerSheet extends ConsumerWidget {
                                   final db = ref.read(databaseProvider);
                                   await db.deleteWallet(w.idWallet!);
                                   ref.read(walletProvider.notifier).refresh();
+                                  await ref.read(authProvider.notifier).refreshUser();
                                 },
                               ),
                             ],
@@ -321,6 +322,7 @@ class WalletManagerSheet extends ConsumerWidget {
               final db = ref.read(databaseProvider);
               await db.updateWallet(updatedWallet);
               ref.read(walletProvider.notifier).refresh();
+              await ref.read(authProvider.notifier).refreshUser();
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Simpan'),
@@ -441,7 +443,7 @@ class CategoryManagerSheet extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedType,
+                initialValue: selectedType,
                 decoration: const InputDecoration(labelText: 'Jenis', border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'IN', child: Text('Pemasukan (IN)')),
@@ -491,7 +493,7 @@ class CategoryManagerSheet extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedType,
+                initialValue: selectedType,
                 decoration: const InputDecoration(labelText: 'Jenis', border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'IN', child: Text('Pemasukan (IN)')),

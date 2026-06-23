@@ -38,3 +38,35 @@
   4. **Attribution:** AI memberikan jawaban dengan menyebutkan sumber data untuk menjaga kredibilitas.
 - [x] **Optimasi Token:** Data hanya dikirim ke API Gemini jika user benar-benar bertanya soal harga, sehingga menghemat kuota API.
 - [x] **Gatekeeper AI:** Memperketat instruksi agar AI hanya menjawab seputar finansial dan aplikasi DuitLy.
+
+## 6. Migrasi ke Custom API OpenRouter
+- [x] Buat class helper `CustomAIService` (`custom_ai_service.dart`) dengan OpenRouter API Key.
+- [x] Ubah `welcome_ai_provider.dart` agar menggunakan `CustomAIService`.
+- [x] Ubah `chat_provider.dart` agar menggunakan `CustomAIService` dengan format riwayat standard.
+
+## 7. Fitur Dashboard Shortcut & OCR Struk Belanja - [DONE]
+- [x] Install dependensi `google_mlkit_text_recognition`, `image_picker`, dan `http`.
+- [x] Buat class helper `ReceiptParserNotifier` untuk OCR & OpenRouter hybrid parsing.
+- [x] Implementasikan Shortcut Grid (Aksi Cepat) di `dashboard_screen.dart`.
+- [x] Buat widget dialog verifikasi `ScanConfirmationDialog`.
+- [x] Modifikasi `AddTransactionSheet` agar menerima data inisialisasi dari hasil scan, dan menyembunyikan tombol scan saat mode edit struk (`isFromScan == true`).
+- [x] Jalankan verifikasi manual dan `flutter analyze`.
+
+## 8. Penyesuaian Batasan (Limit & Timeout) AI
+- [x] Ubah `maxTokens` di `welcome_ai_provider.dart` menjadi `8000` agar model reasoning memiliki cukup ruang.
+- [x] Tambahkan `.timeout(const Duration(seconds: 120))` pada pemanggilan HTTP POST di `custom_ai_service.dart`.
+- [x] Lakukan verifikasi kode dengan `flutter analyze`.
+
+## 9. Penyeragaman Alur Scan Struk & Dialog Read-Only
+- [x] Ubah dialog konfirmasi `ScanConfirmationDialog` agar semua form field bersifat read-only.
+- [x] Tampilkan kategori sebagai TextField read-only di `ScanConfirmationDialog` (bukan Dropdown).
+- [x] Ubah alur di `add_transaction_sheet.dart`: Setelah pemindaian sukses, tutup sheet dan tampilkan `ScanConfirmationDialog`.
+- [x] Jalankan verifikasi kode dengan `flutter analyze`.
+
+## 10. Hardening Keamanan & Kualitas Akhir (Final Scan)
+- [x] Tambahkan validasi identitas (Email & Nama lengkap) sebelum reset password di `login_screen.dart`.
+- [x] Lindungi debug prints sensitif dengan checks `if (kDebugMode)` di service dan providers.
+- [x] Terapkan salted password hashing secara backward-compatible di `password_utils.dart`.
+- [x] Terapkan pembatasan context chat history (maksimal 10 turn) di `chat_provider.dart`.
+- [x] Bersihkan warning `use_build_context_synchronously` di `add_transaction_sheet.dart` menggunakan local variable context.
+- [x] Lakukan scan final dan verifikasi dengan `flutter analyze` (Zero Issues).

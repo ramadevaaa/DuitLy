@@ -1,75 +1,124 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:duitly/core/services/custom_ai_service.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 import 'package:duitly/core/providers/database_provider.dart';
 
 final welcomeAiProvider = FutureProvider<String?>((ref) async {
-  final user = ref.watch(authProvider);
-  if (user == null || user.idUser == null) return null;
+  try {
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: Provider started");
+    }
+    final user = ref.watch(authProvider);
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: User is: $user");
+    }
+    if (user == null || user.idUser == null) {
+      if (kDebugMode) {
+        debugPrint(
+          "WELCOME_AI: User is null or idUser is null. Returning empty.",
+        );
+      }
+      return null;
+    }
 
-  final prefs = await SharedPreferences.getInstance();
-  final lastDate = prefs.getString('welcome_ai_date_v9_${user.idUser}');
-  final cachedMessage = prefs.getString('welcome_ai_msg_v9_${user.idUser}');
-  final today = DateTime.now().toString().substring(0, 10);
+    final prefs = await SharedPreferences.getInstance();
+    final lastDate = prefs.getString('welcome_ai_date_v11_${user.idUser}');
+    final cachedMessage = prefs.getString('welcome_ai_msg_v11_${user.idUser}');
+    final today = DateTime.now().toString().substring(0, 10);
+    if (kDebugMode) {
+      debugPrint(
+        "WELCOME_AI: Cache lastDate: '$lastDate', cachedMessage: '$cachedMessage', today: '$today'",
+      );
+    }
 
-  if (lastDate == today && cachedMessage != null && cachedMessage.isNotEmpty) {
-    print("WELCOME_AI: Found cached message: $cachedMessage");
-    return cachedMessage;
-  }
+    if (lastDate == today &&
+        cachedMessage != null &&
+        cachedMessage.isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint("WELCOME_AI: Found cached message: $cachedMessage");
+      }
+      return cachedMessage;
+    }
 
-  print("WELCOME_AI: No cache found or new day. Generating...");
-  // Generate new message
-  final db = ref.read(databaseProvider);
-  final wallets = await db.readAllWallets(user.idUser!);
-  final transactions = await db.readAllTransactions(user.idUser!);
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: No cache found or new day. Generating...");
+    }
+    final db = ref.read(databaseProvider);
+    final wallets = await db.readAllWallets(user.idUser!);
+    final transactions = await db.readAllTransactions(user.idUser!);
 
-  print(
-    "WELCOME_AI: Fetched ${wallets.length} wallets and ${transactions.length} transactions.",
-  );
+    if (kDebugMode) {
+      debugPrint(
+        "WELCOME_AI: Fetched ${wallets.length} wallets and ${transactions.length} transactions.",
+      );
+    }
 
-  final totalKekayaan = wallets.fold<double>(0, (s, w) => s + w.saldo);
+    final totalKekayaan = wallets.fold<double>(0, (s, w) => s + w.saldo);
 
-  final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
-  if (apiKey.isEmpty) return 'Halo, selamat datang di DuitLy!';
+    final systemInstruction =
+        'Kamu adalah asisten keuangan DuitLy. Balas HANYA dengan TEPAT 2 kalimat pendek dan santai/kasual.\n'
+        'Kalimat 1: Sapa user dengan namanya dan sebutkan total kekayaan/saldonya saat ini secara singkat.\n'
+        'Kalimat 2: Berikan satu kalimat motivasi pendek terkait goals finansial mereka.\n'
+        'ATURAN KETAT:\n'
+        '- JANGAN gunakan markdown (seperti **bold** atau *italic*).\n'
+        '- Tulis sapaan secara sangat singkat, padat, langsung ke poinnya, dan tanpa bertele-tele.\n'
+        '- Pastikan kalimat lengkap selesai sepenuhnya.';
 
-  final model = GenerativeModel(
-    model: 'gemini-2.5-flash',
-    apiKey: apiKey,
-    generationConfig: GenerationConfig(temperature: 0.7, maxOutputTokens: 300),
-    systemInstruction: Content.system(
-      'Kamu adalah asisten DuitLy. Balas HANYA dengan TEPAT 2 kalimat singkat, tidak lebih, tidak kurang. '
-      'Kalimat 1: Sapa user dengan namanya. '
-      'Kalimat 2: Sebutkan goals mereka secara spesifik dan statusnya yang sedang diperjuangkan. '
-      'LARANGAN: Jangan gunakan markdown, jangan lebih dari 2 kalimat, jangan terlalu panjang.',
-    ),
-  );
+    final prompt =
+        '''
+Data:
+- Nama: ${user.nama}
+- Goals: ${user.tujuanFinansial}
+- Total Kekayaan: Rp ${totalKekayaan.toStringAsFixed(0)}
+- Jumlah Transaksi: ${transactions.length}
 
-  final prompt =
-      '''
-Nama user: ${user.nama}
-Tujuan Finansial / Goals: ${user.tujuanFinansial ?? 'Belum diatur'}
-Total Kekayaan saat ini: Rp ${totalKekayaan.toStringAsFixed(0)}
-Jumlah Transaksi yang dicatat: ${transactions.length} transaksi
-
-Tulis sapaan LENGKAP sesuai format. Jangan berhenti di tengah kalimat.
+Tulis sapaan 2 kalimat singkat sesuai format.
 ''';
 
-  try {
-    print("WELCOME_AI: Calling Gemini API...");
-    final response = await model.generateContent([Content.text(prompt)]);
-    final msg =
-        response.text?.replaceAll('**', '').trim() ??
-        'Selamat datang kembali, ${user.nama}!';
-    print("WELCOME_AI: API Success. Msg: $msg");
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: Calling OpenRouter API...");
+    }
+    final response = await CustomAIService.getChatCompletion(
+      [
+        {'role': 'user', 'content': prompt},
+      ],
+      systemInstruction: systemInstruction,
+      maxTokens: 8000,
+    );
+    final msg = response.replaceAll('**', '').trim();
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: API Success. Msg: $msg");
+    }
 
-    await prefs.setString('welcome_ai_date_v9_${user.idUser}', today);
-    await prefs.setString('welcome_ai_msg_v9_${user.idUser}', msg);
+    await prefs.setString('welcome_ai_date_v11_${user.idUser}', today);
+    await prefs.setString('welcome_ai_msg_v11_${user.idUser}', msg);
 
     return msg;
-  } catch (e) {
-    print("WELCOME_AI: API Error: $e");
-    return 'Halo ${user.nama}, yuk cek catatan keuanganmu hari ini!';
+  } catch (e, stack) {
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: Top-level Provider Error: $e\n$stack");
+    }
+    // Fallback to old cached message if possible, even if date doesn't match
+    try {
+      final user = ref.read(authProvider);
+      if (user != null && user.idUser != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString('welcome_ai_msg_v11_${user.idUser}');
+        if (cached != null && cached.isNotEmpty) {
+          if (kDebugMode) {
+            debugPrint("WELCOME_AI: Fallback to old cached message: $cached");
+          }
+          return cached;
+        }
+      }
+    } catch (_) {}
+
+    final fallbackMsg = 'Halo, yuk cek catatan keuanganmu hari ini!';
+    if (kDebugMode) {
+      debugPrint("WELCOME_AI: Using default fallback message: $fallbackMsg");
+    }
+    return fallbackMsg;
   }
 });
