@@ -91,7 +91,7 @@ class CustomAIService {
       final envModel = dotenv.env['OPENROUTER_MODEL'];
       if (envModel != null && envModel.isNotEmpty) return _cleanValue(envModel);
     } catch (_) {}
-    return 'deepseek-v4-flash-free'; // Default model selected by user
+    return 'kc/google/gemini-2.5-flash'; // Default model selected by user
   }
 
   /// Send prompt messages history to OpenRouter API and return the raw text reply.

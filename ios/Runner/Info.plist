@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>DuitLy memerlukan akses kamera untuk mengambil foto struk belanja Anda.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DuitLy memerlukan akses galeri untuk memilih foto struk belanja Anda.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
