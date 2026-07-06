@@ -8,6 +8,8 @@ import 'package:duitly/features/transaction/data/models/category_model.dart';
 import 'package:duitly/features/auth/presentation/providers/auth_provider.dart';
 import 'package:duitly/features/transaction/presentation/providers/report_pdf_service.dart';
 
+const _kPrimary = Color(0xFF1565C0);
+
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
 
@@ -17,48 +19,83 @@ class AnalyticsScreen extends ConsumerWidget {
     final filteredTx = ref.watch(filteredTransactionProvider);
     final spendingMap = ref.watch(spendingByCategoryProvider);
     final categoriesAsync = ref.watch(categoryProvider);
-    final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final currencyFormat = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
 
     final colors = [
-      Colors.blue, Colors.red, Colors.green, Colors.orange,
-      Colors.purple, Colors.teal, Colors.amber, Colors.cyan,
+      Colors.blue,
+      Colors.red,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.amber,
+      Colors.cyan,
     ];
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _kPrimary,
         elevation: 0,
-        title: const Text('Analisis Keuangan', style: TextStyle(color: Colors.black)),
+        title: const Text(
+          'Riwayat & Analitik',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
         actions: [
-          Consumer(builder: (context, ref, _) {
-            return IconButton(
-              icon: const Icon(Icons.print, color: Colors.blue),
-              tooltip: 'Cetak Laporan PDF',
-              onPressed: () {
-                final filteredTx = ref.read(filteredTransactionProvider);
-                final user = ref.read(authProvider);
-                final filter = ref.read(filterProvider);
-                
-                filteredTx.whenData((transactions) {
-                  if (transactions.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tidak ada transaksi untuk dicetak.')));
-                    return;
-                  }
-                  
-                  String periodLabel = '';
-                  switch (filter) {
-                    case TransactionFilter.week7: periodLabel = '7 Hari Terakhir'; break;
-                    case TransactionFilter.month1: periodLabel = '30 Hari Terakhir'; break;
-                    case TransactionFilter.month3: periodLabel = '3 Bulan Terakhir'; break;
-                    case TransactionFilter.year1: periodLabel = '1 Tahun Terakhir'; break;
-                  }
+          Consumer(
+            builder: (context, ref, _) {
+              return IconButton(
+                icon: const Icon(Icons.print_outlined, color: Colors.white),
+                tooltip: 'Cetak Laporan PDF',
+                onPressed: () {
+                  final filteredTx = ref.read(filteredTransactionProvider);
+                  final user = ref.read(authProvider);
+                  final filter = ref.read(filterProvider);
 
-                  ReportPdfService.generateAndPrint(transactions, user?.nama ?? 'User', periodLabel);
-                });
-              },
-            );
-          }),
+                  filteredTx.whenData((transactions) {
+                    if (transactions.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Tidak ada transaksi untuk dicetak.'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    String periodLabel = '';
+                    switch (filter) {
+                      case TransactionFilter.week7:
+                        periodLabel = '7 Hari Terakhir';
+                        break;
+                      case TransactionFilter.month1:
+                        periodLabel = '30 Hari Terakhir';
+                        break;
+                      case TransactionFilter.month3:
+                        periodLabel = '3 Bulan Terakhir';
+                        break;
+                      case TransactionFilter.year1:
+                        periodLabel = '1 Tahun Terakhir';
+                        break;
+                    }
+
+                    ReportPdfService.generateAndPrint(
+                      transactions,
+                      user?.nama ?? 'User',
+                      periodLabel,
+                    );
+                  });
+                },
+              );
+            },
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -67,26 +104,60 @@ class AnalyticsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Filter Chips
-            const Text('Rentang Waktu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text(
+              'Rentang Waktu',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _FilterChip(label: '7 Hari', value: TransactionFilter.week7, current: filter, ref: ref),
+                  _FilterChip(
+                    label: '7 Hari',
+                    value: TransactionFilter.week7,
+                    current: filter,
+                    ref: ref,
+                  ),
                   const SizedBox(width: 8),
-                  _FilterChip(label: '30 Hari', value: TransactionFilter.month1, current: filter, ref: ref),
+                  _FilterChip(
+                    label: '30 Hari',
+                    value: TransactionFilter.month1,
+                    current: filter,
+                    ref: ref,
+                  ),
                   const SizedBox(width: 8),
-                  _FilterChip(label: '3 Bulan', value: TransactionFilter.month3, current: filter, ref: ref),
+                  _FilterChip(
+                    label: '3 Bulan',
+                    value: TransactionFilter.month3,
+                    current: filter,
+                    ref: ref,
+                  ),
                   const SizedBox(width: 8),
-                  _FilterChip(label: '1 Tahun', value: TransactionFilter.year1, current: filter, ref: ref),
+                  _FilterChip(
+                    label: '1 Tahun',
+                    value: TransactionFilter.year1,
+                    current: filter,
+                    ref: ref,
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
             // Pie Chart
-            const Text('Pengeluaran per Kategori', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text(
+              'Pengeluaran per Kategori',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
             const SizedBox(height: 12),
             spendingMap.when(
               data: (map) {
@@ -94,7 +165,10 @@ class AnalyticsScreen extends ConsumerWidget {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(32.0),
-                      child: Text('Belum ada data pengeluaran', style: TextStyle(color: Colors.grey)),
+                      child: Text(
+                        'Belum ada data pengeluaran',
+                        style: TextStyle(color: Colors.grey),
+                      ),
                     ),
                   );
                 }
@@ -117,7 +191,12 @@ class AnalyticsScreen extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                          ),
+                        ],
                       ),
                       child: Column(
                         children: [
@@ -137,7 +216,9 @@ class AnalyticsScreen extends ConsumerWidget {
                                     title: '${pct.toStringAsFixed(0)}%',
                                     radius: 60,
                                     titleStyle: const TextStyle(
-                                      fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   );
                                 }).toList(),
@@ -154,13 +235,27 @@ class AnalyticsScreen extends ConsumerWidget {
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(
                                 children: [
-                                  Container(width: 14, height: 14, decoration: BoxDecoration(
-                                    color: colors[idx % colors.length],
-                                    shape: BoxShape.circle,
-                                  )),
+                                  Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: colors[idx % colors.length],
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
                                   const SizedBox(width: 8),
-                                  Expanded(child: Text(cat?.namaKategori ?? 'Kategori #${entry.key}')),
-                                  Text(currencyFormat.format(entry.value), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Expanded(
+                                    child: Text(
+                                      cat?.namaKategori ??
+                                          'Kategori #${entry.key}',
+                                    ),
+                                  ),
+                                  Text(
+                                    currencyFormat.format(entry.value),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -169,7 +264,8 @@ class AnalyticsScreen extends ConsumerWidget {
                       ),
                     );
                   },
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (_, _) => const Text('Gagal memuat kategori'),
                 );
               },
@@ -180,7 +276,14 @@ class AnalyticsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // Transaction History
-            const Text('Riwayat Transaksi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text(
+              'Riwayat Transaksi',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
             const SizedBox(height: 12),
             filteredTx.when(
               data: (transactions) {
@@ -188,7 +291,10 @@ class AnalyticsScreen extends ConsumerWidget {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(20.0),
-                      child: Text('Tidak ada transaksi di periode ini', style: TextStyle(color: Colors.grey)),
+                      child: Text(
+                        'Tidak ada transaksi di periode ini',
+                        style: TextStyle(color: Colors.grey),
+                      ),
                     ),
                   );
                 }
@@ -200,20 +306,48 @@ class AnalyticsScreen extends ConsumerWidget {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                          ),
+                        ],
                       ),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isOut ? Colors.red[50] : Colors.green[50],
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isOut ? Colors.red[50] : Colors.green[50],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Icon(
                             isOut ? Icons.arrow_downward : Icons.arrow_upward,
                             color: isOut ? Colors.red : Colors.green,
+                            size: 20,
                           ),
                         ),
-                        title: Text(tx.judulTransaksi, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(
-                          DateFormat('dd MMM yyyy, HH:mm').format(tx.timeStamp),
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        title: Text(
+                          tx.judulTransaksi,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            DateFormat(
+                              'dd MMM yyyy, HH:mm',
+                            ).format(tx.timeStamp),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
                         ),
                         trailing: Text(
                           '${isOut ? "-" : "+"}${currencyFormat.format(tx.nominal)}',
@@ -243,23 +377,42 @@ class _FilterChip extends StatelessWidget {
   final TransactionFilter current;
   final WidgetRef ref;
 
-  const _FilterChip({required this.label, required this.value, required this.current, required this.ref});
+  const _FilterChip({
+    required this.label,
+    required this.value,
+    required this.current,
+    required this.ref,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isSelected = value == current;
     return GestureDetector(
       onTap: () => ref.read(filterProvider.notifier).setFilter(value),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue : Colors.white,
+          color: isSelected ? _kPrimary : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? Colors.blue : Colors.grey[300]!),
+          border: Border.all(color: isSelected ? _kPrimary : Colors.grey[300]!),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: _kPrimary.withValues(alpha: 0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
-          style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
         ),
       ),
     );
