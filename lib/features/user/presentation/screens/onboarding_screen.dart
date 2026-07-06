@@ -35,9 +35,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (_goalController.text.isEmpty ||
         _incomeController.text.isEmpty ||
         _initialBalanceController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harap isi semua kolom!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Harap isi semua kolom!')));
       return;
     }
 
@@ -47,12 +47,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (!mounted) return;
     if (existingUser != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email sudah terdaftar! Gunakan email lain.')),
+        const SnackBar(
+          content: Text('Email sudah terdaftar! Gunakan email lain.'),
+        ),
       );
       return;
     }
 
-    final initialBalance = double.tryParse(_initialBalanceController.text) ?? 0.0;
+    final initialBalance =
+        double.tryParse(_initialBalanceController.text) ?? 0.0;
 
     final user = UserModel(
       nama: widget.nama,
@@ -68,13 +71,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final newUser = user.copyWith(idUser: idUser);
 
     // 2. Buat Wallet Pertama secara otomatis
-    await db.insertWallet(WalletModel(
-      idUser: idUser,
-      namaWallet: 'Dompet Utama',
-      saldo: initialBalance,
-      jenisWallet: 'Tunai',
-      catatanWallet: 'Dibuat saat onboarding',
-    ));
+    await db.insertWallet(
+      WalletModel(
+        idUser: idUser,
+        namaWallet: 'Dompet Utama',
+        saldo: initialBalance,
+        jenisWallet: 'Tunai',
+        catatanWallet: 'Dibuat saat onboarding',
+      ),
+    );
 
     // 3. Set auth status ke login
     ref.read(authProvider.notifier).login(newUser);
@@ -101,7 +106,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(40),
+                ),
               ),
               child: SafeArea(
                 child: Stack(
@@ -124,9 +131,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.2),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.5), width: 2),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                width: 2,
+                              ),
                             ),
-                            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 48),
+                            child: const Icon(
+                              Icons.auto_awesome,
+                              color: Colors.white,
+                              size: 48,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           const Text(
@@ -141,7 +155,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           const SizedBox(height: 8),
                           Text(
                             'Bantu AI mengenali profil Anda.',
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       ),
@@ -196,9 +213,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     keyboardType: TextInputType.number,
                     hintText: 'Total kekayaan / saldo saat ini',
                   ),
-                  
+
                   const SizedBox(height: 40),
-                  
+
                   // Submit Button
                   Container(
                     width: double.infinity,
@@ -277,7 +294,10 @@ class _StyledTextField extends StatelessWidget {
         prefixIcon: Icon(icon, color: _kPrimary, size: 20),
         filled: true,
         fillColor: Colors.grey[50],
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: Colors.grey[200]!),
