@@ -241,6 +241,83 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  // ── Bottom Sheet Daftar Dompet ────────────────────────────────────────
+  void _showWalletListPopup(BuildContext context, List wallets) {
+    final fmt = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 0,
+    );
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(top: 12, bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Text(
+              'Daftar Dompet',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            if (wallets.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('Belum ada dompet'),
+              )
+            else
+              ...wallets.map((wallet) => ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.account_balance_wallet, color: _kPrimary),
+                    ),
+                    title: Text(wallet.namaWallet),
+                    subtitle: Text(fmt.format(wallet.saldo)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                    },
+                  )),
+            const Divider(),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.add, color: Colors.green),
+              ),
+              title: const Text(
+                'Tambah Dompet Baru',
+                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showAddWalletDialog(context);
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Scan struk ────────────────────────────────────────────────────────
   void _showScanSourceOptions() {
     showModalBottomSheet(
@@ -642,35 +719,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
               // Dropdown bank
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.account_balance,
-                      color: Colors.white,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      bankName,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.unfold_more,
-                      color: Colors.white70,
-                      size: 14,
-                    ),
-                  ],
+              GestureDetector(
+                onTap: () => _showWalletListPopup(context, wallets),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.account_balance,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        bankName,
+                        style: const TextStyle(color: Colors.white, fontSize: 12),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.unfold_more,
+                        color: Colors.white70,
+                        size: 14,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -825,17 +905,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             children: [
               Expanded(
                 child: _buildSummaryTile(
-                  'Saldo Awal',
-                  fmt.format(weekOut),
-                  Colors.red[400]!,
+                  'Pemasukan',
+                  fmt.format(weekIn),
+                  Colors.green[600]!,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildSummaryTile(
-                  'Saldo Akhir',
-                  fmt.format(weekNet < 0 ? 0 : weekNet),
-                  Colors.green[600]!,
+                  'Pengeluaran',
+                  fmt.format(weekOut),
+                  Colors.red[400]!,
                 ),
               ),
             ],
@@ -1256,122 +1336,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     onTap: () => _showAddWalletDialog(context),
                   ),
                 ]),
-              ),
-            ),
-
-            // ── Daftar Dompet ──
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Dompet Anda',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => _showAddWalletDialog(context),
-                      icon: const Icon(Icons.add, size: 18, color: _kPrimary),
-                      label: const Text(
-                        'Tambah',
-                        style: TextStyle(color: _kPrimary),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 110,
-                child: walletState.when(
-                  data: (wallets) => ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: wallets.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == wallets.length) {
-                        return GestureDetector(
-                          onTap: () => _showAddWalletDialog(context),
-                          child: Container(
-                            width: 110,
-                            margin: const EdgeInsets.only(right: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.blue[200]!),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.add_circle_outline,
-                                  color: _kPrimary,
-                                  size: 28,
-                                ),
-                                const SizedBox(height: 6),
-                                const Text(
-                                  'Tambah\nDompet',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: _kPrimary,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      final wallet = wallets[index];
-                      return Container(
-                        width: 160,
-                        margin: const EdgeInsets.only(right: 12),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              wallet.namaWallet,
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              fmt.format(wallet.saldo),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(color: _kPrimary),
-                  ),
-                  error: (error, stackTrace) =>
-                      const Center(child: Text('Gagal memuat dompet')),
-                ),
               ),
             ),
 

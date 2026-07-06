@@ -58,21 +58,25 @@ class MainShell extends ConsumerWidget {
           true, // body mengalir di balik nav bar (agar FAB terlihat melayang)
       body: pages[activePage],
 
-      // FAB menonjol ke atas dari bottom nav
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddSheet(context),
-        backgroundColor: const Color(0xFF1565C0),
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
+      // FAB menonjol ke atas dari bottom nav hanya di Beranda (0) dan Riwayat (1)
+      floatingActionButton: (activePage == 0 || activePage == 1)
+          ? FloatingActionButton(
+              onPressed: () => _showAddSheet(context),
+              backgroundColor: const Color(0xFF1565C0),
+              elevation: 4,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            )
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
       bottomNavigationBar: BottomAppBar(
         color: Colors.white,
         elevation: 12,
         shadowColor: Colors.black26,
-        shape: const CircularNotchedRectangle(),
+        shape: (activePage == 0 || activePage == 1)
+            ? const CircularNotchedRectangle()
+            : null,
         notchMargin: 8,
         child: SizedBox(
           height: 54,
@@ -99,8 +103,9 @@ class MainShell extends ConsumerWidget {
                     .read(activePageProvider.notifier)
                     .setPage(pageFromNav(1)),
               ),
-              // Spacer untuk notch FAB
-              const SizedBox(width: 48),
+              // Spacer untuk notch FAB hanya jika FAB aktif
+              if (activePage == 0 || activePage == 1)
+                const SizedBox(width: 48),
               _NavItem(
                 icon: Icons.smart_toy_outlined,
                 activeIcon: Icons.smart_toy,
