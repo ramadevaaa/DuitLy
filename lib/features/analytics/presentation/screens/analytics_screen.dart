@@ -339,14 +339,64 @@ class AnalyticsScreen extends ConsumerWidget {
                         ),
                         subtitle: Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            DateFormat(
-                              'dd MMM yyyy, HH:mm',
-                            ).format(tx.timeStamp),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isOut ? Colors.red[50] : Colors.green[50],
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      categoriesAsync.maybeWhen(
+                                        data: (list) {
+                                          final cat = list.firstWhere(
+                                            (c) => c.idKategori == tx.idKategori,
+                                            orElse: () => CategoryModel(
+                                              namaKategori: 'Lainnya',
+                                              jenisArusKas: '',
+                                            ),
+                                          );
+                                          return cat.namaKategori;
+                                        },
+                                        orElse: () => '...',
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: isOut ? Colors.red[600] : Colors.green[700],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    DateFormat(
+                                      'HH:mm',
+                                    ).format(tx.timeStamp),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                DateFormat(
+                                  'dd MMM yyyy',
+                                ).format(tx.timeStamp),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         trailing: Text(
@@ -364,6 +414,7 @@ class AnalyticsScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (_, _) => const Text('Gagal memuat transaksi'),
             ),
+            const SizedBox(height: 100),
           ],
         ),
       ),

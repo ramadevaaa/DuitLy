@@ -6,7 +6,6 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 
 const _kPrimary = Color(0xFF1565C0);
 const _kPrimaryLight = Color(0xFF1976D2);
-const _kPrimaryAccent = Color(0xFF42A5F5);
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});

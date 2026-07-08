@@ -24,8 +24,8 @@ final welcomeAiProvider = FutureProvider<String?>((ref) async {
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final lastDate = prefs.getString('welcome_ai_date_v11_${user.idUser}');
-    final cachedMessage = prefs.getString('welcome_ai_msg_v11_${user.idUser}');
+    final lastDate = prefs.getString('welcome_ai_date_v14_${user.idUser}');
+    final cachedMessage = prefs.getString('welcome_ai_msg_v14_${user.idUser}');
     final today = DateTime.now().toString().substring(0, 10);
     if (kDebugMode) {
       debugPrint(
@@ -55,14 +55,13 @@ final welcomeAiProvider = FutureProvider<String?>((ref) async {
       );
     }
 
-    final totalKekayaan = wallets.fold<double>(0, (s, w) => s + w.saldo);
-
     final systemInstruction =
-        'Kamu adalah asisten keuangan DuitLy. Balas HANYA dengan TEPAT 2 kalimat pendek dan santai/kasual.\n'
-        'Kalimat 1: Sapa user dengan namanya dan sebutkan total kekayaan/saldonya saat ini secara singkat.\n'
-        'Kalimat 2: Berikan satu kalimat motivasi pendek terkait goals finansial mereka.\n'
+        'Kamu adalah asisten penyapa yang ramah dan kasual. Balas HANYA dengan TEPAT 2 kalimat pendek dan santai/kasual.\n'
+        'Kalimat 1: Sapa user dengan namanya dengan ramah.\n'
+        'Kalimat 2: Berikan satu kalimat motivasi pendek terkait rencana masa depan/impian mereka.\n'
         'ATURAN KETAT:\n'
         '- JANGAN gunakan markdown (seperti **bold** atau *italic*).\n'
+        '- JANGAN sebutkan nominal saldo, uang, atau kekayaan.\n'
         '- Tulis sapaan secara sangat singkat, padat, langsung ke poinnya, dan tanpa bertele-tele.\n'
         '- Pastikan kalimat lengkap selesai sepenuhnya.';
 
@@ -70,9 +69,8 @@ final welcomeAiProvider = FutureProvider<String?>((ref) async {
         '''
 Data:
 - Nama: ${user.nama}
-- Goals: ${user.tujuanFinansial}
-- Total Kekayaan: Rp ${totalKekayaan.toStringAsFixed(0)}
-- Jumlah Transaksi: ${transactions.length}
+- Rencana: ${user.tujuanFinansial}
+- Jumlah Catatan: ${transactions.length}
 
 Tulis sapaan 2 kalimat singkat sesuai format.
 ''';
@@ -87,13 +85,40 @@ Tulis sapaan 2 kalimat singkat sesuai format.
       systemInstruction: systemInstruction,
       maxTokens: 8000,
     );
-    final msg = response.replaceAll('**', '').trim();
+    final cleanMsg = response.replaceAll('**', '').trim();
     if (kDebugMode) {
-      debugPrint("WELCOME_AI: API Success. Msg: $msg");
+      debugPrint("WELCOME_AI: API Success. Raw Msg: $cleanMsg");
     }
 
-    await prefs.setString('welcome_ai_date_v11_${user.idUser}', today);
-    await prefs.setString('welcome_ai_msg_v11_${user.idUser}', msg);
+    final lowerMsg = cleanMsg.toLowerCase();
+    final isRefusal = lowerMsg.contains('kiro') ||
+        lowerMsg.contains('development environment') ||
+        lowerMsg.contains('roleplay') ||
+        lowerMsg.contains('financial') ||
+        lowerMsg.contains('i appreciate') ||
+        lowerMsg.contains('prompt') ||
+        lowerMsg.contains('artificial intelligence') ||
+        lowerMsg.contains('coding');
+
+    String msg;
+    if (isRefusal || cleanMsg.isEmpty) {
+      final goalText = user.tujuanFinansial.isNotEmpty
+          ? user.tujuanFinansial
+          : 'masa depan yang cerah';
+      final greetings = [
+        'Halo ${user.nama}! Mari catat setiap transaksi hari ini agar impianmu untuk "$goalText" bisa terwujud selangkah demi selangkah.',
+        'Selamat datang kembali, ${user.nama}! Fokus pada tujuan "$goalText" dan pastikan arus kasmu tetap sehat hari ini.',
+        'Halo ${user.nama}, yuk terus konsisten mencatat keuangan agar impian "$goalText" segera terealisasi!',
+        'Setiap catatan transaksi hari ini membawamu lebih dekat ke impian "$goalText", ${user.nama}. Semangat!',
+      ];
+      final index = (user.nama.hashCode + DateTime.now().day) % greetings.length;
+      msg = greetings[index];
+    } else {
+      msg = cleanMsg;
+    }
+
+    await prefs.setString('welcome_ai_date_v14_${user.idUser}', today);
+    await prefs.setString('welcome_ai_msg_v14_${user.idUser}', msg);
 
     return msg;
   } catch (e, stack) {

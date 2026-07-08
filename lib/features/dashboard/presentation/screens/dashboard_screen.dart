@@ -8,6 +8,7 @@ import 'package:duitly/features/wallet/presentation/providers/wallet_provider.da
 import 'package:duitly/features/wallet/data/models/wallet_model.dart';
 import 'package:duitly/features/transaction/presentation/providers/transaction_provider.dart';
 import 'package:duitly/core/providers/database_provider.dart';
+// ignore: unused_import
 import 'package:duitly/features/dashboard/presentation/providers/welcome_ai_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:duitly/core/navigation/main_shell.dart';
@@ -15,6 +16,11 @@ import 'package:duitly/features/transaction/presentation/providers/receipt_parse
 import 'package:duitly/features/transaction/presentation/widgets/scan_confirmation_dialog.dart';
 import 'package:duitly/features/transaction/presentation/widgets/add_transaction_sheet.dart';
 import 'package:duitly/features/dashboard/presentation/screens/notification_screen.dart';
+import 'package:duitly/features/transaction/data/models/transaction_model.dart';
+import 'package:duitly/features/transaction/presentation/providers/report_pdf_service.dart';
+import 'package:duitly/features/transaction/presentation/providers/category_provider.dart';
+import 'package:duitly/features/transaction/data/models/category_model.dart';
+import 'package:duitly/features/transaction/presentation/widgets/voice_record_sheet.dart';
 
 
 // Warna tema utama
@@ -44,24 +50,303 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  int _selectedWeekTab = 0;
-  final _searchController = TextEditingController();
+  int _selectedPeriodTab = 0;
+  DateTime? _selectedCalendarDate;
 
-  // --- Daftar tab minggu (7 hari terakhir per minggu) ---
-  List<String> get _weekTabs {
+  final List<String> _periodTabs = [
+    'Minggu Lalu',
+    'Bulan Lalu',
+    '3 Bulan Lalu',
+    'Kalender',
+  ];
+
+  void _showDailyDetailDialog(BuildContext context, DateTime date, List<TransactionModel> allTransactions, NumberFormat fmt) {
+    final targetDate = DateTime(date.year, date.month, date.day);
+    final dayTxs = allTransactions.where((tx) {
+      final d = tx.timeStamp;
+      return d.year == targetDate.year && d.month == targetDate.month && d.day == targetDate.day;
+    }).toList();
+
+    dayTxs.sort((a, b) => b.timeStamp.compareTo(a.timeStamp));
+
+    final categories = ref.read(categoryProvider).value ?? [];
+
+    double dayIn = 0;
+    double dayOut = 0;
+    for (final tx in dayTxs) {
+      if (tx.jenisArusKas == 'IN') dayIn += tx.nominal;
+      if (tx.jenisArusKas == 'OUT') dayOut += tx.nominal;
+    }
+    double dayNet = dayIn - dayOut;
+
+    final dateStr = DateFormat('dd MMMM yyyy').format(date);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.only(top: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header & PDF Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Detail Harian', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(dateStr, style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                    if (dayTxs.isNotEmpty)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange[600],
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          minimumSize: Size.zero,
+                        ),
+                        icon: const Icon(Icons.picture_as_pdf_outlined, size: 14),
+                        label: const Text('PDF', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          final user = ref.read(authProvider);
+                          ReportPdfService.generateAndPrint(
+                            dayTxs,
+                            user?.nama ?? 'User',
+                            'Harian ($dateStr)',
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Summary
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.arrow_upward, size: 14, color: Colors.green),
+                              const SizedBox(width: 4),
+                              Text('Pemasukan', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                            ],
+                          ),
+                          Text(fmt.format(dayIn), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.arrow_downward, size: 14, color: Colors.red),
+                              const SizedBox(width: 4),
+                              Text('Pengeluaran', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                            ],
+                          ),
+                          Text(fmt.format(dayOut), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red)),
+                        ],
+                      ),
+                      const Divider(height: 16, thickness: 1),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Selisih Bersih', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[700])),
+                          Text(
+                            '${dayNet >= 0 ? "+" : ""}${fmt.format(dayNet)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: dayNet >= 0 ? Colors.green[700] : Colors.red[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Transaction List
+              Flexible(
+                child: dayTxs.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            'Tidak ada transaksi pada hari ini.',
+                            style: TextStyle(color: Colors.grey, fontSize: 13),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: dayTxs.length,
+                        itemBuilder: (context, index) {
+                          final tx = dayTxs[index];
+                          final isOut = tx.jenisArusKas == 'OUT';
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey[200]!),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: isOut ? Colors.red[50] : Colors.green[50],
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Icon(
+                                    isOut ? Icons.arrow_downward : Icons.arrow_upward,
+                                    color: isOut ? Colors.red[400] : Colors.green[600],
+                                    size: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        tx.judulTransaksi,
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isOut ? Colors.red[50] : Colors.green[50],
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              (() {
+                                                final cat = categories.firstWhere(
+                                                  (c) => c.idKategori == tx.idKategori,
+                                                  orElse: () => CategoryModel(
+                                                    namaKategori: 'Lainnya',
+                                                    jenisArusKas: '',
+                                                  ),
+                                                );
+                                                return cat.namaKategori;
+                                              })(),
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w600,
+                                                color: isOut ? Colors.red[600] : Colors.green[700],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            DateFormat('HH:mm').format(tx.timeStamp),
+                                            style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  '${isOut ? "-" : "+"}${fmt.format(tx.nominal)}',
+                                  style: TextStyle(
+                                    color: isOut ? Colors.red[400] : Colors.green[600],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+
+  Future<void> _selectCalendarDate(BuildContext _, List<TransactionModel> allTransactions, NumberFormat fmt) async {
     final now = DateTime.now();
-    final formatter = DateFormat('dd/MM/yyyy');
-    return [
-      'Minggu Ini',
-      formatter.format(now.subtract(const Duration(days: 7))),
-      formatter.format(now.subtract(const Duration(days: 14))),
-      formatter.format(now.subtract(const Duration(days: 21))),
-    ];
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedCalendarDate ?? now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2),
+      builder: (ctx, child) {
+        return Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: _kPrimary,
+              onPrimary: Colors.white,
+              onSurface: Colors.black87,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (!mounted || pickedDate == null) return;
+    _selectedCalendarDate = pickedDate;
+    final freshTxs = ref.read(transactionProvider).value ?? allTransactions;
+    _showDailyDetailDialog(context, pickedDate, freshTxs, fmt);
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -314,6 +599,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Voice Record ──────────────────────────────────────────────────────
+  void _showVoiceRecordSheet(BuildContext context) {
+    final user = ref.read(userProvider).value;
+    final wallet = ref.read(walletProvider).value?.firstOrNull;
+
+    if (user == null || wallet == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Data user atau dompet tidak ditemukan.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => VoiceRecordSheet(
+        userId: user.idUser!,
+        walletId: wallet.idWallet!,
+        onSuccess: () {
+          // Refresh provider
+          ref.invalidate(transactionProvider);
+          ref.invalidate(walletProvider);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Transaksi berhasil ditambahkan!')),
+          );
+        },
       ),
     );
   }
@@ -611,46 +927,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              // Search bar
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.search, color: Colors.white70, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Cari fitur...',
-                          hintStyle: TextStyle(
-                            color: Colors.white60,
-                            fontSize: 14,
-                          ),
-                          isDense: true,
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+
               const SizedBox(height: 18),
               // ── Balance Card (menyatu di dalam header) ──
               if (isLoading)
@@ -765,6 +1042,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   totalIn,
                   fmt,
                   Icons.arrow_upward,
+                  Colors.green[600]!,
+                  Colors.green[700]!,
+                  Colors.white,
                 ),
               ),
               const SizedBox(width: 12),
@@ -774,6 +1054,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   totalOut,
                   fmt,
                   Icons.arrow_downward,
+                  Colors.red[600]!,
+                  Colors.red[700]!,
+                  Colors.white,
                 ),
               ),
             ],
@@ -788,33 +1071,50 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     double amount,
     NumberFormat fmt,
     IconData icon,
+    Color iconColor,
+    Color amountColor,
+    Color bgColor,
   ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
+        color: bgColor,
         borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: Colors.white70, size: 13),
-              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(icon, color: iconColor, size: 14),
+              ),
+              const SizedBox(width: 6),
               Text(
                 label,
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                style: const TextStyle(color: Colors.black54, fontSize: 11, fontWeight: FontWeight.bold),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             fmt.format(amount),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+            style: TextStyle(
+              color: amountColor,
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -824,50 +1124,80 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  // ── Tab Minggu ────────────────────────────────────────────────────────
-  Widget _buildWeeklySection(List transactions, NumberFormat fmt) {
-    // Hitung saldo awal dan akhir berdasarkan tab yang dipilih
+  // ── Tab Periode & Kalender ──────────────────────────────────────────
+  Widget _buildPeriodSection(List transactions, NumberFormat fmt) {
     final now = DateTime.now();
-    final offsetDays = _selectedWeekTab * 7;
-    final endDate = now.subtract(Duration(days: offsetDays));
-    final startDate = endDate.subtract(const Duration(days: 6));
+    DateTime startDate;
+    DateTime endDate;
 
-    double weekIn = 0;
-    double weekOut = 0;
-    for (final tx in transactions) {
-      final d = tx.timeStamp as DateTime;
-      if (!d.isBefore(
-            DateTime(startDate.year, startDate.month, startDate.day),
-          ) &&
-          !d.isAfter(
-            DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59),
-          )) {
-        if (tx.jenisArusKas == 'IN') weekIn += tx.nominal as double;
-        if (tx.jenisArusKas == 'OUT') weekOut += tx.nominal as double;
-      }
+    final yesterday = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+    final endOfDayYesterday = DateTime(yesterday.year, yesterday.month, yesterday.day, 23, 59, 59);
+
+    switch (_selectedPeriodTab) {
+      case 1: // Bulan Lalu
+        startDate = DateTime(yesterday.year, yesterday.month - 1, yesterday.day);
+        endDate = endOfDayYesterday;
+        break;
+      case 2: // 3 Bulan Lalu
+        startDate = DateTime(yesterday.year, yesterday.month - 3, yesterday.day);
+        endDate = endOfDayYesterday;
+        break;
+      case 0: // Minggu Lalu
+      default:
+        startDate = yesterday.subtract(const Duration(days: 6));
+        endDate = endOfDayYesterday;
+        break;
     }
-    final weekNet = weekIn - weekOut;
+
+    // Filter transactions to period
+    final typedTxs = transactions.cast<TransactionModel>();
+    final filteredTxs = typedTxs.where((tx) {
+      final d = tx.timeStamp;
+      return !d.isBefore(startDate) && !d.isAfter(endDate);
+    }).toList();
+
+    // Sort by timestamp descending
+    filteredTxs.sort((a, b) => b.timeStamp.compareTo(a.timeStamp));
+
+    double periodIn = 0;
+    double periodOut = 0;
+    for (final tx in filteredTxs) {
+      if (tx.jenisArusKas == 'IN') periodIn += tx.nominal;
+      if (tx.jenisArusKas == 'OUT') periodOut += tx.nominal;
+    }
+    double periodNet = periodIn - periodOut;
+
+    final dateFormatter = DateFormat('dd MMM yyyy');
+    final activeRangeText = '${dateFormatter.format(startDate)} - ${dateFormatter.format(endDate)}';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Tab scroll horizontal
         SizedBox(
-          height: 36,
+          height: 38,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: _weekTabs.length,
+            itemCount: _periodTabs.length,
             separatorBuilder: (context, index) => const SizedBox(width: 8),
             itemBuilder: (context, i) {
-              final isActive = _selectedWeekTab == i;
+              final isActive = _selectedPeriodTab == i;
               return GestureDetector(
-                onTap: () => setState(() => _selectedWeekTab = i),
+                onTap: () {
+                  if (i == 3) {
+                    _selectCalendarDate(context, typedTxs, fmt);
+                  } else {
+                    setState(() {
+                      _selectedPeriodTab = i;
+                    });
+                  }
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
+                    horizontal: 16,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
                     color: isActive ? _kPrimary : Colors.white,
@@ -885,20 +1215,52 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ]
                         : [],
                   ),
-                  child: Text(
-                    _weekTabs[i],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isActive ? Colors.white : Colors.grey[600],
-                    ),
+                  child: Row(
+                    children: [
+                      if (i == 4) ...[
+                        Icon(
+                          Icons.calendar_month,
+                          size: 14,
+                          color: isActive ? Colors.white : Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(
+                        _periodTabs[i],
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isActive ? Colors.white : Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
+        // Active range display & Print PDF action button
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Icon(Icons.date_range, size: 14, color: Colors.grey[600]),
+              const SizedBox(width: 6),
+              Text(
+                activeRangeText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Summary tiles
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
@@ -906,7 +1268,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Expanded(
                 child: _buildSummaryTile(
                   'Pemasukan',
-                  fmt.format(weekIn),
+                  fmt.format(periodIn),
                   Colors.green[600]!,
                 ),
               ),
@@ -914,11 +1276,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Expanded(
                 child: _buildSummaryTile(
                   'Pengeluaran',
-                  fmt.format(weekOut),
+                  fmt.format(periodOut),
                   Colors.red[400]!,
                 ),
               ),
             ],
+          ),
+        ),
+        // Net balance summary
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: periodNet >= 0 ? Colors.green[50] : Colors.red[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: periodNet >= 0 ? Colors.green[100]! : Colors.red[100]!,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Selisih Bersih',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: periodNet >= 0 ? Colors.green[800] : Colors.red[800],
+                  ),
+                ),
+                Text(
+                  '${periodNet >= 0 ? "+" : ""}${fmt.format(periodNet)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: periodNet >= 0 ? Colors.green[700] : Colors.red[700],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -981,58 +1379,99 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
     if (maxY == 0) maxY = 10000;
 
+    // Warna premium
+    const incomeColor = Color(0xFF00C853);
+    const expenseColor = Color(0xFFFF5252);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Legend
+          // Header row: Legend + period label
           Row(
             children: [
-              _legendDot(Colors.green, 'Pemasukan'),
-              const SizedBox(width: 16),
-              _legendDot(Colors.red, 'Pengeluaran'),
+              _legendPill(incomeColor, 'Pemasukan'),
+              const SizedBox(width: 12),
+              _legendPill(expenseColor, 'Pengeluaran'),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _kPrimary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  '7 Hari',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _kPrimary,
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           SizedBox(
-            height: 180,
+            height: 200,
             child: LineChart(
               LineChartData(
                 lineTouchData: LineTouchData(
+                  handleBuiltInTouches: true,
                   touchTooltipData: LineTouchTooltipData(
-                    getTooltipColor: (_) => Colors.blueGrey.shade800,
-                    getTooltipItems: (spots) => spots
-                        .map(
-                          (s) => LineTooltipItem(
-                            fmt.format(s.y),
-                            const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    getTooltipColor: (_) => const Color(0xFF1E293B),
+                    getTooltipItems: (spots) => spots.map((s) {
+                      final isIncome = s.barIndex == 0;
+                      return LineTooltipItem(
+                        fmt.format(s.y),
+                        TextStyle(
+                          color: isIncome ? const Color(0xFF69F0AE) : const Color(0xFFFF8A80),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      );
+                    }).toList(),
                   ),
+                  getTouchedSpotIndicator: (data, indices) =>
+                      indices.map((i) => TouchedSpotIndicatorData(
+                        FlLine(
+                          color: Colors.grey.withValues(alpha: 0.3),
+                          strokeWidth: 1,
+                          dashArray: [4, 4],
+                        ),
+                        FlDotData(
+                          show: true,
+                          getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                            radius: 6,
+                            color: Colors.white,
+                            strokeWidth: 3,
+                            strokeColor: data.color ?? _kPrimary,
+                          ),
+                        ),
+                      )).toList(),
                 ),
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) =>
-                      FlLine(color: Colors.grey[100]!, strokeWidth: 1),
+                  horizontalInterval: maxY > 0 ? maxY * 1.25 / 4 : 2500,
+                  getDrawingHorizontalLine: (_) => FlLine(
+                    color: Colors.grey.withValues(alpha: 0.08),
+                    strokeWidth: 1,
+                  ),
                 ),
                 titlesData: FlTitlesData(
                   rightTitles: const AxisTitles(
@@ -1041,25 +1480,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   topTitles: const AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
-                  leftTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 42,
+                      interval: maxY > 0 ? maxY * 1.25 / 4 : 2500,
+                      getTitlesWidget: (val, _) {
+                        if (val == 0) return const SizedBox();
+                        String label;
+                        if (val >= 1000000) {
+                          label = '${(val / 1000000).toStringAsFixed(1)}jt';
+                        } else if (val >= 1000) {
+                          label = '${(val / 1000).toStringAsFixed(0)}rb';
+                        } else {
+                          label = val.toStringAsFixed(0);
+                        }
+                        return Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[400],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      },
+                    ),
                   ),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       interval: 1,
-                      reservedSize: 24,
+                      reservedSize: 30,
                       getTitlesWidget: (val, _) {
                         final idx = val.toInt();
                         if (idx < 0 || idx >= 7) return const SizedBox();
+                        final day = last7Days[idx];
+                        final isToday = day.day == now.day && day.month == now.month && day.year == now.year;
                         return Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            DateFormat('dd/MM').format(last7Days[idx]),
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: Colors.grey[400],
-                            ),
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                DateFormat('dd').format(day),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                                  color: isToday ? _kPrimary : Colors.grey[500],
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -1072,45 +1542,77 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 minY: 0,
                 maxY: maxY * 1.25,
                 lineBarsData: [
-                  // Garis Pemasukan
+                  // Garis Pemasukan — Premium Style
                   LineChartBarData(
                     spots: incomeSpots,
                     isCurved: true,
-                    curveSmoothness: 0.4,
-                    color: Colors.green[600],
-                    barWidth: 2.5,
+                    curveSmoothness: 0.35,
+                    preventCurveOverShooting: true,
+                    color: incomeColor,
+                    barWidth: 3,
                     isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
+                    shadow: Shadow(
+                      color: incomeColor.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                        radius: 4,
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                        strokeColor: incomeColor,
+                      ),
+                    ),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          Colors.green.withValues(alpha: 0.15),
-                          Colors.green.withValues(alpha: 0.01),
+                          incomeColor.withValues(alpha: 0.25),
+                          incomeColor.withValues(alpha: 0.08),
+                          incomeColor.withValues(alpha: 0.0),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.5, 1.0],
                       ),
                     ),
                   ),
-                  // Garis Pengeluaran
+                  // Garis Pengeluaran — Premium Style
                   LineChartBarData(
                     spots: expenseSpots,
                     isCurved: true,
-                    curveSmoothness: 0.4,
-                    color: Colors.red[400],
-                    barWidth: 2.5,
+                    curveSmoothness: 0.35,
+                    preventCurveOverShooting: true,
+                    color: expenseColor,
+                    barWidth: 3,
                     isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
+                    shadow: Shadow(
+                      color: expenseColor.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                        radius: 4,
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                        strokeColor: expenseColor,
+                      ),
+                    ),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          Colors.red.withValues(alpha: 0.12),
-                          Colors.red.withValues(alpha: 0.01),
+                          expenseColor.withValues(alpha: 0.18),
+                          expenseColor.withValues(alpha: 0.05),
+                          expenseColor.withValues(alpha: 0.0),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.5, 1.0],
                       ),
                     ),
                   ),
@@ -1123,16 +1625,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _legendDot(Color color, String label) {
+  Widget _legendPill(Color color, String label) {
     return Row(
       children: [
         Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.4),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(width: 5),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -1143,6 +1662,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final userState = ref.watch(userProvider);
     final walletState = ref.watch(walletProvider);
     final transactionState = ref.watch(transactionProvider);
+    final categoriesState = ref.watch(categoryProvider);
+    final categories = categoriesState.value ?? [];
     final fmt = NumberFormat.currency(
       locale: 'id_ID',
       symbol: 'Rp ',
@@ -1220,6 +1741,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             SliverToBoxAdapter(
               child: Consumer(
                 builder: (context, ref, _) {
+                  // SEMENTARA JANGAN DITAMPILKAN
+                  return const SizedBox.shrink();
+
+                  /*
                   final welcomeMsg = ref.watch(welcomeAiProvider);
                   return welcomeMsg.when(
                     data: (msg) {
@@ -1265,6 +1790,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     error: (error, stackTrace) => const SizedBox.shrink(),
                   );
+                  */
                 },
               ),
             ),
@@ -1274,7 +1800,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(top: 20),
                 child: transactionState.when(
-                  data: (txs) => _buildWeeklySection(txs, fmt),
+                  data: (txs) => _buildPeriodSection(txs, fmt),
                   loading: () => const SizedBox(),
                   error: (error, stackTrace) => const SizedBox(),
                 ),
@@ -1302,6 +1828,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 delegate: SliverChildListDelegate([
                   _buildQuickAction(
+                    title: 'Catat Suara',
+                    subtitle: 'Pakai AI',
+                    icon: Icons.mic_none,
+                    iconColor: Colors.pink,
+                    bgColor: Colors.pink[50]!,
+                    onTap: () => _showVoiceRecordSheet(context),
+                  ),
+                  _buildQuickAction(
                     title: 'Scan Struk',
                     subtitle: 'Catat otomatis',
                     icon: Icons.document_scanner_outlined,
@@ -1315,8 +1849,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     icon: Icons.picture_as_pdf_outlined,
                     iconColor: Colors.orange[700]!,
                     bgColor: Colors.orange[50]!,
-                    onTap: () =>
-                        ref.read(activePageProvider.notifier).setPage(2),
+                    onTap: () {
+                      final txs = transactionState.value ?? [];
+                      if (txs.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Tidak ada transaksi untuk dicetak')),
+                        );
+                        return;
+                      }
+                      final user = userState.value;
+                      ReportPdfService.generateAndPrint(
+                        txs,
+                        user?.nama ?? 'User',
+                        'Laporan Transaksi',
+                      );
+                    },
                   ),
                   _buildQuickAction(
                     title: 'Tanya AI',
@@ -1334,6 +1881,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     iconColor: _kPrimary,
                     bgColor: Colors.blue[50]!,
                     onTap: () => _showAddWalletDialog(context),
+                  ),
+                  _buildQuickAction(
+                    title: 'Kalender',
+                    subtitle: 'Detail harian',
+                    icon: Icons.calendar_month_outlined,
+                    iconColor: Colors.indigo[700]!,
+                    bgColor: Colors.indigo[50]!,
+                    onTap: () {
+                      final txs = transactionState.value ?? [];
+                      _selectCalendarDate(context, txs, fmt);
+                    },
                   ),
                 ]),
               ),
@@ -1380,7 +1938,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        ref.read(activePageProvider.notifier).setPage(1);
+                      },
                       child: const Text(
                         'Lihat Semua',
                         style: TextStyle(color: _kPrimary),
@@ -1463,15 +2023,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    DateFormat(
-                                      'dd MMM yyyy',
-                                    ).format(tx.timeStamp),
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[500],
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isOut ? Colors.red[50] : Colors.green[50],
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          (() {
+                                            final cat = categories.firstWhere(
+                                              (c) => c.idKategori == tx.idKategori,
+                                              orElse: () => CategoryModel(
+                                                namaKategori: 'Lainnya',
+                                                jenisArusKas: '',
+                                              ),
+                                            );
+                                            return cat.namaKategori;
+                                          })(),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: isOut ? Colors.red[600] : Colors.green[700],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        DateFormat(
+                                          'dd MMM yyyy',
+                                        ).format(tx.timeStamp),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[500],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
